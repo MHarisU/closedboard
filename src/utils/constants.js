@@ -39,6 +39,28 @@ export const TAGS = {
   research: { label: 'Research', color: 'bg-cyan-500' },
   personal: { label: 'Personal', color: 'bg-pink-500' },
   work: { label: 'Work', color: 'bg-amber-500' },
-  learning: { label: 'Learning', color: 'bg-green-500' },
-  ai: { label: 'AI Task', color: 'bg-violet-500' }
+  ai: { label: 'AI Task', color: 'bg-violet-500' },
+  // Learning tags
+  learning: { label: '🎓 Learning', color: 'bg-gradient-to-r from-violet-500 to-purple-500', isLearning: true },
+  'react-native': { label: '⚛️ React Native', color: 'bg-cyan-500', isLearningTopic: true },
+  'aws-sst': { label: '☁️ AWS SST', color: 'bg-orange-500', isLearningTopic: true },
+  'javascript': { label: '🟨 JavaScript', color: 'bg-yellow-500', isLearningTopic: true }
 };
+
+// Learning topics for easy access
+export const LEARNING_TOPICS = ['react-native', 'aws-sst', 'javascript'];
+
+// Get learning-related tags
+export const getLearningTags = () => 
+  Object.entries(TAGS)
+    .filter(([_, tag]) => tag.isLearning || tag.isLearningTopic)
+    .map(([id, tag]) => ({ id, ...tag }));
+
+// Check if task is a learning task
+export const isLearningTask = (task) => 
+  task.tags?.includes('learning') || 
+  task.tags?.some(tag => TAGS[tag]?.isLearningTopic);
+
+// Get topic from task
+export const getTaskTopic = (task) => 
+  task.tags?.find(tag => TAGS[tag]?.isLearningTopic) || null;

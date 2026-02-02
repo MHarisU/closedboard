@@ -10,6 +10,7 @@ import StatsPanel from './components/StatsPanel';
 import ActivityFeed from './components/ActivityFeed';
 import TaskModal from './components/TaskModal';
 import ToastContainer from './components/ToastContainer';
+import LearningDashboard from './components/LearningDashboard';
 import { COLUMNS, TAGS } from './utils/constants';
 
 function AppContent() {
@@ -202,6 +203,9 @@ function AppContent() {
 
         {/* Stats Panel */}
         {showStats && <StatsPanel tasks={tasks} />}
+
+        {/* Learning Dashboard */}
+        <LearningDashboard tasks={tasks} onTagFilter={handleTagFilter} />
 
         {/* Currently Working */}
         <CurrentlyWorking tasks={currentlyWorking} />
