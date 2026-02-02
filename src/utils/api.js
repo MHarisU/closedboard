@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE = 'https://coat-represents-visited-draws.trycloudflare.com/api';
+const API_BASE = 'https://legends-athletics-task-disturbed.trycloudflare.com/api';
 
 // Check if API is available
 export async function checkAPIHealth() {
