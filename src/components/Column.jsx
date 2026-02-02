@@ -3,7 +3,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import TaskCard from './TaskCard';
 import { COLUMNS } from '../utils/constants';
 
-export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDeleteTask, onUpdateSubtask, isArchive = false }) {
+export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDeleteTask, onUpdateSubtask, onTagFilter, activeTagFilter, isArchive = false }) {
   const { isDark } = useTheme();
   const [isDragOver, setIsDragOver] = useState(false);
   const column = COLUMNS[columnId];
@@ -104,6 +104,8 @@ export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDele
               onEdit={onEditTask}
               onDelete={onDeleteTask}
               onUpdateSubtask={onUpdateSubtask}
+              onTagFilter={onTagFilter}
+              activeTagFilter={activeTagFilter}
             />
           ))
         )}

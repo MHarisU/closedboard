@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { PRIORITIES, TAGS, formatTime } from '../utils/constants';
 
-export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubtask }) {
+export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter }) {
   const { isDark } = useTheme();
   const [expandedSubtasks, setExpandedSubtasks] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
@@ -30,10 +30,8 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
     const deltaX = e.touches[0].clientX - touchStart.current.x;
     const deltaY = e.touches[0].clientY - touchStart.current.y;
     
-    // Only swipe if horizontal movement is greater than vertical
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
       setIsSwiping(true);
-      // Limit swipe distance
       const clampedX = Math.max(-100, Math.min(100, deltaX));
       setSwipeX(clampedX);
     }
@@ -42,15 +40,18 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
   const handleTouchEnd = () => {
     if (Math.abs(swipeX) > 60) {
       if (swipeX > 0 && task.column !== 'completed') {
-        // Swipe right - complete
         onMove(task.id, 'completed');
       } else if (swipeX < 0) {
-        // Swipe left - delete
         onDelete(task.id);
       }
     }
     setSwipeX(0);
     setIsSwiping(false);
+  };
+
+  const handleTagClick = (e, tagId) => {
+    e.stopPropagation();
+    onTagFilter?.(tagId);
   };
 
   const priorityStyles = {
@@ -79,7 +80,6 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
     onUpdateSubtask(task.id, newSubtasks);
   };
 
-  // Swipe indicator colors
   const getSwipeBackground = () => {
     if (swipeX > 30) return isDark ? 'bg-emerald-500/20' : 'bg-emerald-100';
     if (swipeX < -30) return isDark ? 'bg-red-500/20' : 'bg-red-100';
@@ -88,7 +88,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
 
   return (
     <div className="relative mb-3 overflow-hidden rounded-xl">
-      {/* Swipe background indicators */}
+      {/* Swipe background */}
       <div className={`absolute inset-0 flex items-center justify-between px-4 transition-colors
         ${getSwipeBackground()}`}>
         <span className={`text-emerald-500 font-medium text-sm ${swipeX > 30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
@@ -115,19 +115,22 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
           ${task.column === 'completed' ? 'opacity-70' : ''}
           ${isSwiping ? 'transition-none' : 'transition-transform'}`}
       >
-        {/* Tags */}
+        {/* Tags - Clickable */}
         {task.tags && task.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2.5">
             {task.tags.map(tagId => {
               const tag = TAGS[tagId];
               if (!tag) return null;
+              const isActive = activeTagFilter === tagId;
               return (
-                <span 
+                <button
                   key={tagId}
-                  className={`text-[10px] px-2 py-0.5 rounded-full text-white font-medium ${tag.color}`}
+                  onClick={(e) => handleTagClick(e, tagId)}
+                  className={`text-[10px] px-2 py-0.5 rounded-full text-white font-medium transition-all
+                    ${tag.color} ${isActive ? 'ring-2 ring-white/50 scale-105' : 'hover:scale-105'}`}
                 >
                   {tag.label}
-                </span>
+                </button>
               );
             })}
           </div>
@@ -171,7 +174,6 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
               </span>
             </button>
             
-            {/* Progress bar */}
             <div className={`w-full h-1.5 rounded-full overflow-hidden
               ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
               <div 

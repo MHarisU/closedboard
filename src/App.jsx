@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { ToastProvider, useToast } from './contexts/ToastContext';
 import { useBoard } from './hooks/useBoard';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import Header from './components/Header';
@@ -8,7 +9,8 @@ import CurrentlyWorking from './components/CurrentlyWorking';
 import StatsPanel from './components/StatsPanel';
 import ActivityFeed from './components/ActivityFeed';
 import TaskModal from './components/TaskModal';
-import { COLUMNS } from './utils/constants';
+import ToastContainer from './components/ToastContainer';
+import { COLUMNS, TAGS } from './utils/constants';
 
 function AppContent() {
   const {
@@ -29,11 +31,13 @@ function AppContent() {
   } = useBoard();
 
   const { isDark } = useTheme();
+  const toast = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showArchive, setShowArchive] = useState(false);
   const [showStats, setShowStats] = useState(true);
+  const [tagFilter, setTagFilter] = useState(null);
   const searchInputRef = useRef(null);
 
   const handleNewTask = useCallback(() => {
@@ -49,15 +53,42 @@ function AppContent() {
   const handleSaveTask = async (taskData) => {
     if (taskData.id) {
       await updateTask(taskData.id, taskData);
+      toast.success('Task updated!');
     } else {
       await addTask(taskData);
+      toast.success('Task created!');
+    }
+  };
+
+  const handleMoveTask = async (taskId, column) => {
+    const task = tasks[taskId];
+    await moveTask(taskId, column);
+    if (column === 'completed') {
+      toast.success(`✅ Completed: ${task?.title || 'Task'}`);
+    } else if (column === 'inProgress') {
+      toast.info(`🚀 Started: ${task?.title || 'Task'}`);
     }
   };
 
   const handleDeleteTask = async (taskId) => {
+    const task = tasks[taskId];
     if (window.confirm('Delete this task?')) {
       await deleteTask(taskId);
+      toast.success(`🗑️ Deleted: ${task?.title || 'Task'}`);
     }
+  };
+
+  const handleTagFilter = (tagId) => {
+    if (tagFilter === tagId) {
+      setTagFilter(null); // Toggle off
+    } else {
+      setTagFilter(tagId);
+      toast.info(`Filtering by: ${TAGS[tagId]?.label || tagId}`);
+    }
+  };
+
+  const clearTagFilter = () => {
+    setTagFilter(null);
   };
 
   const focusSearch = useCallback(() => {
@@ -67,6 +98,12 @@ function AppContent() {
   const closeModal = useCallback(() => {
     setIsModalOpen(false);
   }, []);
+
+  // Filter tasks by tag
+  const filterTasksByTag = (taskList) => {
+    if (!tagFilter) return taskList;
+    return taskList.filter(task => task.tags?.includes(tagFilter));
+  };
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -78,7 +115,7 @@ function AppContent() {
   });
 
   const currentlyWorking = getCurrentlyWorking();
-  const archivedTasks = getArchivedTasks(searchQuery);
+  const archivedTasks = filterTasksByTag(getArchivedTasks(searchQuery));
 
   if (loading) {
     return (
@@ -142,6 +179,27 @@ function AppContent() {
           </div>
         )}
 
+        {/* Tag Filter indicator */}
+        {tagFilter && (
+          <div className={`mb-4 p-3 rounded-xl flex items-center justify-between text-sm
+            ${isDark 
+              ? 'bg-violet-500/10 border border-violet-500/20 text-violet-400' 
+              : 'bg-violet-50 border border-violet-200 text-violet-700'}`}>
+            <span className="flex items-center gap-2">
+              🏷️ Filtering by tag: 
+              <span className={`px-2 py-0.5 rounded-full text-white text-xs ${TAGS[tagFilter]?.color}`}>
+                {TAGS[tagFilter]?.label}
+              </span>
+            </span>
+            <button 
+              onClick={clearTagFilter} 
+              className="hover:underline font-medium"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
+
         {/* Stats Panel */}
         {showStats && <StatsPanel tasks={tasks} />}
 
@@ -154,10 +212,12 @@ function AppContent() {
             <Column
               columnId="completed"
               tasks={archivedTasks}
-              onMoveTask={moveTask}
+              onMoveTask={handleMoveTask}
               onEditTask={handleEditTask}
               onDeleteTask={handleDeleteTask}
               onUpdateSubtask={updateSubtasks}
+              onTagFilter={handleTagFilter}
+              activeTagFilter={tagFilter}
               isArchive={true}
             />
           </div>
@@ -168,11 +228,13 @@ function AppContent() {
               <Column
                 key={columnId}
                 columnId={columnId}
-                tasks={getTasksByColumn(columnId, searchQuery)}
-                onMoveTask={moveTask}
+                tasks={filterTasksByTag(getTasksByColumn(columnId, searchQuery))}
+                onMoveTask={handleMoveTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask}
                 onUpdateSubtask={updateSubtasks}
+                onTagFilter={handleTagFilter}
+                activeTagFilter={tagFilter}
               />
             ))}
           </div>
@@ -205,6 +267,9 @@ function AppContent() {
         onSave={handleSaveTask}
         editTask={editingTask}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer />
     </div>
   );
 }
@@ -212,7 +277,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </ThemeProvider>
   );
 }
