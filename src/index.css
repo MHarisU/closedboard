@@ -2,9 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+}
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .drag-over {
@@ -13,10 +24,14 @@ body {
 
 .task-card {
   @apply transition-all duration-200 cursor-grab active:cursor-grabbing;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.task-card:hover {
-  @apply transform -translate-y-0.5 shadow-lg;
+@media (hover: hover) {
+  .task-card:hover {
+    @apply transform -translate-y-0.5 shadow-lg;
+  }
 }
 
 .column-scroll::-webkit-scrollbar {
@@ -33,4 +48,14 @@ body {
 
 .column-scroll::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-500;
+}
+
+/* Mobile touch improvements */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Prevent horizontal scroll */
+.overflow-x-hidden {
+  overflow-x: hidden;
 }
