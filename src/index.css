@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Light theme colors */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --bg-input: #f8fafc;
+  
+  --border-primary: #e2e8f0;
+  --border-secondary: #cbd5e1;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  --accent-blue: #3b82f6;
+  --accent-blue-hover: #2563eb;
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-yellow: #f59e0b;
+  --accent-purple: #8b5cf6;
+}
+
+.dark {
+  /* Dark theme colors */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+  --bg-input: #1e293b;
+  
+  --border-primary: #334155;
+  --border-secondary: #475569;
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  
+  --accent-blue: #60a5fa;
+  --accent-blue-hover: #3b82f6;
+  --accent-green: #34d399;
+  --accent-red: #f87171;
+  --accent-yellow: #fbbf24;
+  --accent-purple: #a78bfa;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
@@ -9,27 +57,26 @@
 
 html {
   overflow-x: hidden;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-  width: 100%;
-}
-
-/* Light mode base */
-:root {
   color-scheme: light;
 }
 
-/* Dark mode */
 .dark {
   color-scheme: dark;
 }
 
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  width: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Drag & Drop */
 .drag-over {
-  @apply ring-2 ring-blue-500 ring-opacity-50 bg-blue-500/10;
+  @apply ring-2 ring-blue-500/50 bg-blue-500/5;
 }
 
 .task-card {
@@ -40,10 +87,11 @@ body {
 
 @media (hover: hover) {
   .task-card:hover {
-    @apply transform -translate-y-0.5 shadow-lg;
+    @apply transform -translate-y-1 shadow-lg;
   }
 }
 
+/* Scrollbar */
 .column-scroll::-webkit-scrollbar {
   width: 6px;
 }
@@ -52,49 +100,86 @@ body {
   @apply bg-transparent;
 }
 
-.dark .column-scroll::-webkit-scrollbar-thumb {
-  @apply bg-slate-600 rounded-full;
-}
-
-.dark .column-scroll::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-500;
-}
-
 .column-scroll::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  background-color: var(--border-secondary);
+  @apply rounded-full;
 }
 
 .column-scroll::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-400;
+  background-color: var(--text-muted);
 }
 
-/* Mobile touch improvements */
+/* Touch */
 .touch-manipulation {
   touch-action: manipulation;
 }
 
-/* Prevent horizontal scroll */
-.overflow-x-hidden {
-  overflow-x: hidden;
-}
-
-/* Animation for modal */
+/* Animations */
 @keyframes slide-in {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-10px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-.animate-slide-in {
-  animation: slide-in 0.2s ease-out;
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* Checkbox styling */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.25s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Form elements */
 input[type="checkbox"] {
-  @apply accent-blue-500;
+  @apply accent-blue-500 cursor-pointer;
+}
+
+input, textarea, select {
+  @apply transition-all duration-200;
+}
+
+input:focus, textarea:focus, select:focus {
+  @apply outline-none ring-2 ring-blue-500/50;
+}
+
+/* Button base */
+.btn {
+  @apply transition-all duration-200 font-medium rounded-lg;
+}
+
+.btn:active {
+  @apply scale-95;
+}
+
+/* Glass effect for light mode */
+.glass-light {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Glass effect for dark mode */
+.dark .glass-dark {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
