@@ -12,6 +12,7 @@ export default function App() {
     history,
     loading,
     connected,
+    lastSync,
     addTask,
     moveTask,
     updateTask,
@@ -66,9 +67,9 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <Header 
         onNewTask={handleNewTask} 
-        onReset={resetBoard}
         onRefresh={refresh}
         connected={connected}
+        lastSync={lastSync}
       />
       
       <main className="max-w-7xl mx-auto px-4 py-6">
@@ -106,7 +107,7 @@ export default function App() {
         <footer className="text-center py-8 text-slate-600 text-sm">
           <p>Built with 💙 by ClosedBot 🔐 for Rohail</p>
           <p className="text-xs mt-1">
-            {connected ? '🟢 Connected to Workspace API' : '🟡 LocalStorage Mode'}
+            {connected ? '🟢 Live sync enabled (30s)' : '🟡 LocalStorage Mode'}
           </p>
         </footer>
       </main>
