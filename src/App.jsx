@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useBoard } from './hooks/useBoard';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import Header from './components/Header';
 import Column from './components/Column';
 import CurrentlyWorking from './components/CurrentlyWorking';
+import StatsPanel from './components/StatsPanel';
 import ActivityFeed from './components/ActivityFeed';
 import TaskModal from './components/TaskModal';
 import { COLUMNS } from './utils/constants';
 
 function AppContent() {
   const {
+    tasks,
     history,
     loading,
     connected,
@@ -30,11 +33,13 @@ function AppContent() {
   const [editingTask, setEditingTask] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showArchive, setShowArchive] = useState(false);
+  const [showStats, setShowStats] = useState(true);
+  const searchInputRef = useRef(null);
 
-  const handleNewTask = () => {
+  const handleNewTask = useCallback(() => {
     setEditingTask(null);
     setIsModalOpen(true);
-  };
+  }, []);
 
   const handleEditTask = (task) => {
     setEditingTask(task);
@@ -54,6 +59,23 @@ function AppContent() {
       await deleteTask(taskId);
     }
   };
+
+  const focusSearch = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+  }, []);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNewTask: handleNewTask,
+    onRefresh: refresh,
+    onSearch: focusSearch,
+    onCloseModal: closeModal,
+    isModalOpen
+  });
 
   const currentlyWorking = getCurrentlyWorking();
   const archivedTasks = getArchivedTasks(searchQuery);
@@ -87,6 +109,9 @@ function AppContent() {
         onSearchChange={setSearchQuery}
         showArchive={showArchive}
         onToggleArchive={() => setShowArchive(!showArchive)}
+        showStats={showStats}
+        onToggleStats={() => setShowStats(!showStats)}
+        searchInputRef={searchInputRef}
       />
       
       <main className="max-w-7xl mx-auto px-4 py-6">
@@ -116,6 +141,9 @@ function AppContent() {
             </button>
           </div>
         )}
+
+        {/* Stats Panel */}
+        {showStats && <StatsPanel tasks={tasks} />}
 
         {/* Currently Working */}
         <CurrentlyWorking tasks={currentlyWorking} />
@@ -164,13 +192,16 @@ function AppContent() {
             {connected ? 'Live sync (30s)' : 'Offline mode'}
             {showArchive && <span>• 📦 Archive</span>}
           </p>
+          <p className={`text-[10px] mt-3 ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>
+            ⌨️ N: New • R: Refresh • /: Search • Esc: Close
+          </p>
         </footer>
       </main>
 
       {/* Task Modal */}
       <TaskModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={closeModal}
         onSave={handleSaveTask}
         editTask={editingTask}
       />
