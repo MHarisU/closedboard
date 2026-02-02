@@ -30,3 +30,15 @@ export const PRIORITIES = {
   high: { label: 'High', color: 'orange', icon: '●' },
   urgent: { label: 'Urgent', color: 'red', icon: '🔥' }
 };
+
+// Tag configurations
+export const TAGS = {
+  feature: { label: 'Feature', color: 'bg-purple-500' },
+  bug: { label: 'Bug', color: 'bg-red-500' },
+  improvement: { label: 'Improvement', color: 'bg-blue-500' },
+  research: { label: 'Research', color: 'bg-cyan-500' },
+  personal: { label: 'Personal', color: 'bg-pink-500' },
+  work: { label: 'Work', color: 'bg-amber-500' },
+  learning: { label: 'Learning', color: 'bg-green-500' },
+  ai: { label: 'AI Task', color: 'bg-violet-500' }
+};

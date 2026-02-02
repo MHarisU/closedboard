@@ -18,6 +18,16 @@ body {
   width: 100%;
 }
 
+/* Light mode base */
+:root {
+  color-scheme: light;
+}
+
+/* Dark mode */
+.dark {
+  color-scheme: dark;
+}
+
 .drag-over {
   @apply ring-2 ring-blue-500 ring-opacity-50 bg-blue-500/10;
 }
@@ -42,12 +52,20 @@ body {
   @apply bg-transparent;
 }
 
-.column-scroll::-webkit-scrollbar-thumb {
+.dark .column-scroll::-webkit-scrollbar-thumb {
   @apply bg-slate-600 rounded-full;
 }
 
-.column-scroll::-webkit-scrollbar-thumb:hover {
+.dark .column-scroll::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-500;
+}
+
+.column-scroll::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+
+.column-scroll::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
 }
 
 /* Mobile touch improvements */
@@ -58,4 +76,25 @@ body {
 /* Prevent horizontal scroll */
 .overflow-x-hidden {
   overflow-x: hidden;
+}
+
+/* Animation for modal */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out;
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+  @apply accent-blue-500;
 }

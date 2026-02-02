@@ -58,7 +58,9 @@ export const useBoard = () => {
       id: optimisticId,
       ...task,
       createdAt: Date.now(),
-      isAITask: task.isAITask || false
+      isAITask: task.isAITask || false,
+      tags: task.tags || [],
+      subtasks: task.subtasks || []
     };
 
     // Optimistic update
@@ -156,6 +158,11 @@ export const useBoard = () => {
     return result;
   }, [data.tasks]);
 
+  // Update subtasks specifically
+  const handleUpdateSubtasks = useCallback(async (taskId, subtasks) => {
+    return handleUpdateTask(taskId, { subtasks });
+  }, [handleUpdateTask]);
+
   // Delete task (optimistic)
   const handleDeleteTask = useCallback(async (taskId) => {
     const previousTask = data.tasks[taskId];
@@ -190,14 +197,42 @@ export const useBoard = () => {
     return result;
   }, [data.tasks]);
 
-  // Get tasks by column
-  const getTasksByColumn = useCallback((columnId) => {
+  // Get tasks by column with optional search filter
+  const getTasksByColumn = useCallback((columnId, searchQuery = '') => {
+    const query = searchQuery.toLowerCase();
     return Object.values(data.tasks || {})
-      .filter(task => task.column === columnId)
+      .filter(task => {
+        const matchesColumn = task.column === columnId;
+        if (!query) return matchesColumn;
+        
+        const matchesSearch = 
+          task.title.toLowerCase().includes(query) ||
+          (task.description || '').toLowerCase().includes(query) ||
+          (task.tags || []).some(tag => tag.toLowerCase().includes(query));
+        
+        return matchesColumn && matchesSearch;
+      })
       .sort((a, b) => {
         const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
         return priorityOrder[a.priority] - priorityOrder[b.priority];
       });
+  }, [data.tasks]);
+
+  // Get archived (completed) tasks
+  const getArchivedTasks = useCallback((searchQuery = '') => {
+    const query = searchQuery.toLowerCase();
+    return Object.values(data.tasks || {})
+      .filter(task => {
+        const isCompleted = task.column === 'completed';
+        if (!query) return isCompleted;
+        
+        const matchesSearch = 
+          task.title.toLowerCase().includes(query) ||
+          (task.description || '').toLowerCase().includes(query);
+        
+        return isCompleted && matchesSearch;
+      })
+      .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
   }, [data.tasks]);
 
   // Get currently working tasks (AI tasks in progress)
@@ -220,8 +255,10 @@ export const useBoard = () => {
     addTask,
     moveTask: handleMoveTask,
     updateTask: handleUpdateTask,
+    updateSubtasks: handleUpdateSubtasks,
     deleteTask: handleDeleteTask,
     getTasksByColumn,
+    getArchivedTasks,
     getCurrentlyWorking,
     resetBoard,
     refresh
