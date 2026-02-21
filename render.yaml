@@ -1,0 +1,13 @@
+services:
+  - type: web
+    runtime: node
+    name: closedboard-api
+    repo: https://github.com/MHarisU/closedboard
+    rootDir: backend
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
