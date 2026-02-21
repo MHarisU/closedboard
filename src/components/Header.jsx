@@ -1,14 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Shield, Search, X, BarChart3, Archive, Sun, Moon, RefreshCw, Plus } from 'lucide-react';
+import { Shield, Search, X, BarChart3, Archive, Sun, Moon, RefreshCw, Plus, Download, Tag } from 'lucide-react';
+import { downloadExport } from '../utils/api';
+import BoardSelector from './BoardSelector';
 
 export default function Header({
   onNewTask, onRefresh, connected, lastSync,
   searchQuery, onSearchChange, showArchive, onToggleArchive,
-  showStats, onToggleStats, searchInputRef
+  showStats, onToggleStats, searchInputRef,
+  boards, currentBoardId, onSwitchBoard, onCreateBoard, onUpdateBoard, onDeleteBoard,
+  onOpenTagManager
 }) {
   const { isDark, toggleTheme } = useTheme();
   const [syncText, setSyncText] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef(null);
 
   useEffect(() => {
     const updateSyncText = () => {
@@ -23,37 +29,38 @@ export default function Header({
     return () => clearInterval(interval);
   }, [lastSync]);
 
+  useEffect(() => {
+    const handler = (e) => { if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleExport = async (format) => {
+    setExportOpen(false);
+    await downloadExport(currentBoardId, format);
+  };
+
   return (
     <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300
-      ${isDark
-        ? 'bg-slate-900/80 border-slate-700/50'
-        : 'bg-white/80 border-slate-200'}`}>
+      ${isDark ? 'bg-slate-900/80 border-slate-700/50' : 'bg-white/80 border-slate-200'}`}>
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-4">
-          {/* Logo */}
+          {/* Logo + Board Selector */}
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center
-              ${isDark ? 'bg-blue-500/20' : 'bg-blue-50'}`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-blue-500/20' : 'bg-blue-50'}`}>
               <Shield size={20} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
             </div>
             <div>
-              <h1 className={`text-lg font-bold tracking-tight
-                ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                ClosedBoard
-              </h1>
+              <h1 className={`text-lg font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>ClosedBoard</h1>
               <div className="flex items-center gap-2 text-xs">
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>
-                  Task Tracker
-                </span>
-                <span className={`w-1.5 h-1.5 rounded-full ${connected
-                  ? 'bg-emerald-500 animate-pulse-soft'
-                  : 'bg-amber-500'}`} />
-                {syncText && (
-                  <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>
-                    {syncText}
-                  </span>
-                )}
+                <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse-soft' : 'bg-amber-500'}`} />
+                {syncText && <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>{syncText}</span>}
               </div>
+            </div>
+            <div className="hidden sm:block ml-1">
+              <BoardSelector boards={boards} currentBoardId={currentBoardId}
+                onSwitch={onSwitchBoard} onCreate={onCreateBoard}
+                onUpdate={onUpdateBoard} onDelete={onDeleteBoard} />
             </div>
           </div>
 
@@ -61,24 +68,14 @@ export default function Header({
           <div className="flex-1 max-w-md hidden sm:block">
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search... (press /)"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
+              <input ref={searchInputRef} type="text" placeholder="Search... (press /)"
+                value={searchQuery} onChange={(e) => onSearchChange(e.target.value)}
                 className={`w-full pl-9 pr-9 py-2 rounded-xl text-sm transition-all duration-200
-                  ${isDark
-                    ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800 focus:border-slate-600'
-                    : 'bg-slate-100 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-slate-300'}
-                  border focus:ring-2 focus:ring-blue-500/20`}
-              />
+                  ${isDark ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500 focus:bg-slate-800 focus:border-slate-600' : 'bg-slate-100 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white focus:border-slate-300'}
+                  border focus:ring-2 focus:ring-blue-500/20`} />
               {searchQuery && (
-                <button
-                  onClick={() => onSearchChange('')}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2
-                    ${isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}
-                >
+                <button onClick={() => onSearchChange('')}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}>
                   <X size={14} />
                 </button>
               )}
@@ -87,82 +84,87 @@ export default function Header({
 
           {/* Actions */}
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={onToggleStats}
+            <button onClick={onToggleStats}
               className={`p-2.5 rounded-xl transition-all duration-200
-                ${showStats
-                  ? isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-100 text-violet-600'
-                  : isDark
-                    ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
-              title={showStats ? 'Hide Stats' : 'Show Stats'}
-            >
+                ${showStats ? isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-100 text-violet-600'
+                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title={showStats ? 'Hide Stats' : 'Show Stats'}>
               <BarChart3 size={18} />
             </button>
 
-            <button
-              onClick={onToggleArchive}
+            <button onClick={onToggleArchive}
               className={`p-2.5 rounded-xl transition-all duration-200
-                ${showArchive
-                  ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
-                  : isDark
-                    ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
-              title={showArchive ? 'Hide Archive' : 'Show Archive'}
-            >
+                ${showArchive ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title={showArchive ? 'Hide Archive' : 'Show Archive'}>
               <Archive size={18} />
             </button>
 
-            <button
-              onClick={toggleTheme}
+            <button onClick={onOpenTagManager}
               className={`p-2.5 rounded-xl transition-all duration-200
-                ${isDark
-                  ? 'text-slate-400 hover:text-yellow-400 hover:bg-slate-800'
-                  : 'text-slate-500 hover:text-amber-500 hover:bg-slate-100'}`}
-              title={isDark ? 'Light Mode' : 'Dark Mode'}
-            >
+                ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title="Manage Tags">
+              <Tag size={18} />
+            </button>
+
+            {/* Export dropdown */}
+            <div className="relative" ref={exportRef}>
+              <button onClick={() => setExportOpen(!exportOpen)}
+                className={`p-2.5 rounded-xl transition-all duration-200
+                  ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+                title="Export Data">
+                <Download size={18} />
+              </button>
+              {exportOpen && (
+                <div className={`absolute right-0 top-full mt-1.5 w-44 rounded-xl border shadow-xl z-50 overflow-hidden
+                  ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <button onClick={() => handleExport('json')}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                    Download JSON
+                  </button>
+                  <button onClick={() => handleExport('csv')}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                    Download CSV
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button onClick={toggleTheme}
+              className={`p-2.5 rounded-xl transition-all duration-200 ${isDark ? 'text-slate-400 hover:text-yellow-400 hover:bg-slate-800' : 'text-slate-500 hover:text-amber-500 hover:bg-slate-100'}`}
+              title={isDark ? 'Light Mode' : 'Dark Mode'}>
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            <button
-              onClick={onRefresh}
-              className={`p-2.5 rounded-xl transition-all duration-200
-                ${isDark
-                  ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
-              title="Refresh (R)"
-            >
+            <button onClick={onRefresh}
+              className={`p-2.5 rounded-xl transition-all duration-200 ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title="Refresh (R)">
               <RefreshCw size={18} />
             </button>
 
-            <button
-              onClick={onNewTask}
+            <button onClick={onNewTask}
               className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white rounded-xl
                 hover:bg-blue-600 transition-all duration-200 font-medium text-sm
                 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-95"
-              title="New Task (N)"
-            >
+              title="New Task (N)">
               <Plus size={18} />
               <span className="hidden sm:inline">New</span>
             </button>
           </div>
         </div>
 
-        {/* Mobile Search */}
-        <div className="mt-3 sm:hidden">
+        {/* Mobile: Board Selector + Search */}
+        <div className="mt-3 sm:hidden space-y-2">
+          <BoardSelector boards={boards} currentBoardId={currentBoardId}
+            onSwitch={onSwitchBoard} onCreate={onCreateBoard}
+            onUpdate={onUpdateBoard} onDelete={onDeleteBoard} />
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
+            <input type="text" placeholder="Search tasks..." value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className={`w-full pl-9 pr-4 py-2 rounded-xl text-sm transition-all duration-200
-                ${isDark
-                  ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500'
-                  : 'bg-slate-100 border-slate-200 text-slate-900 placeholder-slate-400'}
-                border focus:ring-2 focus:ring-blue-500/20`}
-            />
+                ${isDark ? 'bg-slate-800/50 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 text-slate-900 placeholder-slate-400'}
+                border focus:ring-2 focus:ring-blue-500/20`} />
           </div>
         </div>
       </div>

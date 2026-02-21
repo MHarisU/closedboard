@@ -2,62 +2,65 @@ import { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   ClipboardList, Zap, CheckCircle, Check, Trash2, Pencil, Bot,
-  Circle, CircleDot, AlertCircle, Flame, ChevronDown
+  Circle, CircleDot, AlertCircle, Flame, ChevronDown,
+  Play, Pause, Clock, CalendarClock
 } from 'lucide-react';
-import { PRIORITIES, TAGS, COLUMNS, formatTime } from '../utils/constants';
+import {
+  PRIORITIES, COLUMNS, formatTime, formatDuration, totalTimeMs,
+  formatDueDate, getDueDateStatus
+} from '../utils/constants';
 
 const columnIcons = { backlog: ClipboardList, inProgress: Zap, completed: CheckCircle };
 const priorityIcons = { low: Circle, medium: CircleDot, high: AlertCircle, urgent: Flame };
 
-export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter, isFocused }) {
+export default function TaskCard({
+  task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter,
+  isFocused, customTags, onStartTimer, onStopTimer, activeTimerTaskId
+}) {
   const { isDark } = useTheme();
   const [expandedSubtasks, setExpandedSubtasks] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const touchStart = useRef({ x: 0, y: 0 });
   const cardRef = useRef(null);
 
   const priority = PRIORITIES[task.priority];
   const PriorityIcon = priorityIcons[task.priority] || Circle;
+  const dueStatus = getDueDateStatus(task.dueDate);
+  const isTimerRunning = activeTimerTaskId === task.id;
+  const accumulatedTime = totalTimeMs(task.timeEntries);
 
   useEffect(() => {
-    if (isFocused && cardRef.current) {
-      cardRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+    if (isFocused && cardRef.current) cardRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [isFocused]);
 
-  const handleDragStart = (e) => {
-    e.dataTransfer.setData('taskId', task.id);
-    e.dataTransfer.effectAllowed = 'move';
-  };
+  useEffect(() => {
+    const entries = task.timeEntries || [];
+    const last = entries[entries.length - 1];
+    if (last && !last.end) {
+      setElapsed(Date.now() - last.start);
+      const interval = setInterval(() => setElapsed(Date.now() - last.start), 1000);
+      return () => clearInterval(interval);
+    }
+    setElapsed(0);
+  }, [task.timeEntries]);
 
-  const handleTouchStart = (e) => {
-    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    setIsSwiping(false);
-  };
-
+  const handleDragStart = (e) => { e.dataTransfer.setData('taskId', task.id); e.dataTransfer.effectAllowed = 'move'; };
+  const handleTouchStart = (e) => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; setIsSwiping(false); };
   const handleTouchMove = (e) => {
     const deltaX = e.touches[0].clientX - touchStart.current.x;
     const deltaY = e.touches[0].clientY - touchStart.current.y;
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
-      setIsSwiping(true);
-      setSwipeX(Math.max(-100, Math.min(100, deltaX)));
-    }
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) { setIsSwiping(true); setSwipeX(Math.max(-100, Math.min(100, deltaX))); }
   };
-
   const handleTouchEnd = () => {
     if (Math.abs(swipeX) > 60) {
       if (swipeX > 0 && task.column !== 'completed') onMove(task.id, 'completed');
       else if (swipeX < 0) onDelete(task.id);
     }
-    setSwipeX(0);
-    setIsSwiping(false);
+    setSwipeX(0); setIsSwiping(false);
   };
-
-  const handleTagClick = (e, tagId) => {
-    e.stopPropagation();
-    onTagFilter?.(tagId);
-  };
+  const handleTagClick = (e, tagId) => { e.stopPropagation(); onTagFilter?.(tagId); };
 
   const priorityStyles = {
     low: isDark ? 'bg-slate-500/20 text-slate-400 border-slate-500/30' : 'bg-slate-100 text-slate-600 border-slate-200',
@@ -85,52 +88,60 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
 
   const moveTargets = Object.entries(COLUMNS).filter(([id]) => id !== task.column);
 
+  const dueRingClass = dueStatus === 'overdue'
+    ? 'ring-2 ring-red-500/60' + (isDark ? ' ring-offset-slate-900' : ' ring-offset-white') + ' ring-offset-1'
+    : dueStatus === 'soon'
+      ? 'ring-2 ring-amber-500/60' + (isDark ? ' ring-offset-slate-900' : ' ring-offset-white') + ' ring-offset-1'
+      : '';
+
+  const tags = customTags || {};
+
   return (
     <div className="relative mb-3 overflow-hidden rounded-xl">
-      {/* Swipe background */}
       <div className={`absolute inset-0 flex items-center justify-between px-4 transition-colors ${getSwipeBackground()}`}>
-        <span className={`text-emerald-500 font-medium text-sm flex items-center gap-1.5
-          ${swipeX > 30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
+        <span className={`text-emerald-500 font-medium text-sm flex items-center gap-1.5 ${swipeX > 30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
           <Check size={14} /> Complete
         </span>
-        <span className={`text-red-500 font-medium text-sm flex items-center gap-1.5
-          ${swipeX < -30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
+        <span className={`text-red-500 font-medium text-sm flex items-center gap-1.5 ${swipeX < -30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
           Delete <Trash2 size={14} />
         </span>
       </div>
 
-      <div
-        ref={cardRef}
-        tabIndex={0}
-        draggable={!isSwiping}
-        onDragStart={handleDragStart}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+      <div ref={cardRef} tabIndex={0} draggable={!isSwiping}
+        onDragStart={handleDragStart} onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
         style={{ transform: `translateX(${swipeX}px)` }}
         className={`task-card relative rounded-xl p-4 border transition-all duration-200 outline-none
-          ${isDark
-            ? 'bg-slate-800/95 border-slate-700/50 hover:border-slate-600'
-            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'}
+          ${isDark ? 'bg-slate-800/95 border-slate-700/50 hover:border-slate-600' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'}
           ${task.isAITask ? 'border-l-4 border-l-blue-500' : ''}
           ${task.column === 'completed' ? 'opacity-70' : ''}
           ${isSwiping ? 'transition-none' : 'transition-transform'}
-          ${isFocused ? 'ring-2 ring-blue-500 ring-offset-1 ' + (isDark ? 'ring-offset-slate-900' : 'ring-offset-white') : ''}`}
+          ${isFocused ? 'ring-2 ring-blue-500 ring-offset-1 ' + (isDark ? 'ring-offset-slate-900' : 'ring-offset-white') : dueRingClass}`}
       >
+        {/* Due date badge */}
+        {task.dueDate && task.column !== 'completed' && (
+          <div className={`flex items-center gap-1 text-[10px] font-medium mb-2 px-2 py-0.5 rounded-full w-fit
+            ${dueStatus === 'overdue'
+              ? isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-50 text-red-600'
+              : dueStatus === 'soon'
+                ? isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-50 text-amber-600'
+                : isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+            <CalendarClock size={10} />
+            {dueStatus === 'overdue' ? 'Overdue' : dueStatus === 'soon' ? 'Due soon' : 'Due'} {formatDueDate(task.dueDate)}
+          </div>
+        )}
+
         {/* Tags */}
         {task.tags && task.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2.5">
             {task.tags.map(tagId => {
-              const tag = TAGS[tagId];
+              const tag = tags[tagId];
               if (!tag) return null;
               const isActive = activeTagFilter === tagId;
               return (
-                <button
-                  key={tagId}
-                  onClick={(e) => handleTagClick(e, tagId)}
+                <button key={tagId} onClick={(e) => handleTagClick(e, tagId)}
                   className={`text-[10px] px-2 py-0.5 rounded-full text-white font-medium transition-all
-                    ${tag.color} ${isActive ? 'ring-2 ring-white/50 scale-105' : 'hover:scale-105'}`}
-                >
+                    ${tag.color} ${isActive ? 'ring-2 ring-white/50 scale-105' : 'hover:scale-105'}`}>
                   {tag.label}
                 </button>
               );
@@ -140,23 +151,19 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
 
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h4 className={`font-medium text-sm leading-snug flex-1 min-w-0 flex items-center gap-1.5
-            ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          <h4 className={`font-medium text-sm leading-snug flex-1 min-w-0 flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
             {task.isAITask && <Bot size={14} className="text-blue-500 shrink-0" />}
             {task.column === 'completed' && <Check size={14} className="text-emerald-500 shrink-0" />}
             <span className="truncate">{task.title}</span>
           </h4>
-          <span className={`text-[10px] px-2 py-1 rounded-full border font-medium whitespace-nowrap inline-flex items-center gap-1
-            ${priorityStyles[task.priority]}`}>
+          <span className={`text-[10px] px-2 py-1 rounded-full border font-medium whitespace-nowrap inline-flex items-center gap-1 ${priorityStyles[task.priority]}`}>
             <PriorityIcon size={10} />
             {priority.label}
           </span>
         </div>
 
-        {/* Description */}
         {task.description && (
-          <p className={`text-xs mb-3 line-clamp-2 leading-relaxed
-            ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-xs mb-3 line-clamp-2 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             {task.description}
           </p>
         )}
@@ -164,47 +171,24 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
         {/* Subtasks */}
         {hasSubtasks && (
           <div className="mb-3">
-            <button
-              onClick={() => setExpandedSubtasks(!expandedSubtasks)}
-              className={`text-xs flex items-center gap-1.5 mb-2 transition-colors
-                ${isDark ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}
-            >
+            <button onClick={() => setExpandedSubtasks(!expandedSubtasks)}
+              className={`text-xs flex items-center gap-1.5 mb-2 transition-colors ${isDark ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}>
               <ChevronDown size={12} className={`transition-transform ${expandedSubtasks ? '' : '-rotate-90'}`} />
               <span>Subtasks</span>
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium
-                ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
                 {completedSubtasks}/{subtasks.length}
               </span>
             </button>
-
-            <div className={`w-full h-1.5 rounded-full overflow-hidden
-              ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
-                style={{ width: `${subtaskProgress}%` }}
-              />
+            <div className={`w-full h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500" style={{ width: `${subtaskProgress}%` }} />
             </div>
-
             {expandedSubtasks && (
               <div className="mt-2.5 space-y-1.5">
                 {subtasks.map((subtask, index) => (
-                  <label
-                    key={index}
-                    className={`flex items-center gap-2.5 text-xs cursor-pointer p-1.5 -mx-1.5 rounded-lg transition-colors
-                      ${isDark ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={subtask.done}
-                      onChange={() => toggleSubtask(index)}
-                      className={`w-3.5 h-3.5 rounded border-2 transition-colors
-                        ${isDark ? 'border-slate-600 bg-slate-700' : 'border-slate-300 bg-white'}`}
-                    />
-                    <span className={`transition-all duration-200 ${
-                      subtask.done
-                        ? 'line-through ' + (isDark ? 'text-slate-500' : 'text-slate-400')
-                        : isDark ? 'text-slate-300' : 'text-slate-600'
-                    }`}>
+                  <label key={index} className={`flex items-center gap-2.5 text-xs cursor-pointer p-1.5 -mx-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
+                    <input type="checkbox" checked={subtask.done} onChange={() => toggleSubtask(index)}
+                      className={`w-3.5 h-3.5 rounded border-2 transition-colors ${isDark ? 'border-slate-600 bg-slate-700' : 'border-slate-300 bg-white'}`} />
+                    <span className={`transition-all duration-200 ${subtask.done ? 'line-through ' + (isDark ? 'text-slate-500' : 'text-slate-400') : isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                       {subtask.text}
                     </span>
                   </label>
@@ -219,15 +203,10 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
           {moveTargets.map(([colId]) => {
             const ColIcon = columnIcons[colId];
             return (
-              <button
-                key={colId}
-                onClick={(e) => { e.stopPropagation(); onMove(task.id, colId); }}
+              <button key={colId} onClick={(e) => { e.stopPropagation(); onMove(task.id, colId); }}
                 className={`text-[10px] px-2 py-1 rounded-lg transition-colors font-medium inline-flex items-center gap-1
-                  ${isDark
-                    ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
-                title={`Move to ${COLUMNS[colId].label}`}
-              >
+                  ${isDark ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
+                title={`Move to ${COLUMNS[colId].label}`}>
                 <ColIcon size={11} />
                 {COLUMNS[colId].label}
               </button>
@@ -236,26 +215,38 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
         </div>
 
         {/* Footer */}
-        <div className={`flex items-center justify-between text-[11px] pt-2 border-t
-          ${isDark ? 'border-slate-700/50 text-slate-500' : 'border-slate-100 text-slate-400'}`}>
-          <span>
-            {task.completedAt ? `Done ${formatTime(task.completedAt)}` : formatTime(task.createdAt)}
-          </span>
+        <div className={`flex items-center justify-between text-[11px] pt-2 border-t ${isDark ? 'border-slate-700/50 text-slate-500' : 'border-slate-100 text-slate-400'}`}>
+          <div className="flex items-center gap-2">
+            <span>{task.completedAt ? `Done ${formatTime(task.completedAt)}` : formatTime(task.createdAt)}</span>
+            {(accumulatedTime > 0 || isTimerRunning) && (
+              <span className={`inline-flex items-center gap-0.5 ${isTimerRunning ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : ''}`}>
+                <Clock size={10} />
+                {isTimerRunning ? formatDuration(accumulatedTime + elapsed) : formatDuration(accumulatedTime)}
+              </span>
+            )}
+          </div>
           <div className="flex gap-0.5">
-            <button
-              onClick={() => onEdit(task)}
-              className={`p-1.5 rounded-lg transition-colors
-                ${isDark ? 'hover:bg-slate-700 hover:text-slate-300' : 'hover:bg-slate-100 hover:text-slate-600'}`}
-              title="Edit (Enter)"
-            >
+            {/* Timer button */}
+            {task.column !== 'completed' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); isTimerRunning ? onStopTimer?.(task.id) : onStartTimer?.(task.id); }}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  isTimerRunning
+                    ? isDark ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                    : isDark ? 'hover:bg-slate-700 hover:text-slate-300' : 'hover:bg-slate-100 hover:text-slate-600'}`}
+                title={isTimerRunning ? 'Stop timer' : 'Start timer'}
+              >
+                {isTimerRunning ? <Pause size={13} /> : <Play size={13} />}
+              </button>
+            )}
+            <button onClick={() => onEdit(task)}
+              className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-slate-700 hover:text-slate-300' : 'hover:bg-slate-100 hover:text-slate-600'}`}
+              title="Edit (Enter)">
               <Pencil size={13} />
             </button>
-            <button
-              onClick={() => onDelete(task.id)}
-              className={`p-1.5 rounded-lg transition-colors
-                ${isDark ? 'hover:bg-red-500/20 hover:text-red-400' : 'hover:bg-red-50 hover:text-red-500'}`}
-              title="Delete (D)"
-            >
+            <button onClick={() => onDelete(task.id)}
+              className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-red-500/20 hover:text-red-400' : 'hover:bg-red-50 hover:text-red-500'}`}
+              title="Delete (D)">
               <Trash2 size={13} />
             </button>
           </div>

@@ -12,9 +12,10 @@ import CurrentlyWorking from './components/CurrentlyWorking';
 import StatsPanel from './components/StatsPanel';
 import ActivityFeed from './components/ActivityFeed';
 import TaskModal from './components/TaskModal';
+import TagManager from './components/TagManager';
 import ToastContainer from './components/ToastContainer';
 import LearningDashboard from './components/LearningDashboard';
-import { COLUMNS, TAGS } from './utils/constants';
+import { COLUMNS } from './utils/constants';
 
 function SkeletonCard({ isDark }) {
   const bg = isDark ? 'bg-slate-700' : 'bg-slate-200';
@@ -73,21 +74,15 @@ function EmptyBoard({ isDark, onNewTask }) {
           style={{ animation: 'bounce 2s ease-in-out infinite' }}>
           <Rocket size={40} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
         </div>
-        <h2 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-800'}`}>
-          Your board is empty
-        </h2>
-        <p className={`text-sm mb-6 max-w-sm mx-auto leading-relaxed
-          ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        <h2 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-800'}`}>Your board is empty</h2>
+        <p className={`text-sm mb-6 max-w-sm mx-auto leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
           Start organizing your work. Create your first task with the
-          <kbd className={`mx-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold
-            ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>+</kbd>
+          <kbd className={`mx-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>+</kbd>
           button or press
-          <kbd className={`mx-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold
-            ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>N</kbd>
+          <kbd className={`mx-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>N</kbd>
         </p>
         <button onClick={onNewTask}
-          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors text-sm"
-        >
+          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors text-sm">
           Create First Task
         </button>
       </div>
@@ -98,7 +93,11 @@ function EmptyBoard({ isDark, onNewTask }) {
 function AppContent() {
   const {
     tasks, history, loading, connected, lastSync, pendingSync,
+    boards, currentBoardId, setCurrentBoardId, customTags, activeTimerTaskId,
     addTask, moveTask, updateTask, updateSubtasks, deleteTask,
+    startTimer, stopTimer,
+    createBoard, updateBoard, deleteBoard,
+    createTag, updateTag, deleteTag,
     getTasksByColumn, getArchivedTasks, getCurrentlyWorking, refresh
   } = useBoard();
 
@@ -111,20 +110,15 @@ function AppContent() {
   const [showStats, setShowStats] = useState(true);
   const [tagFilter, setTagFilter] = useState(null);
   const [focusedTaskId, setFocusedTaskId] = useState(null);
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const searchInputRef = useRef(null);
 
   const handleNewTask = useCallback(() => { setEditingTask(null); setIsModalOpen(true); }, []);
-
   const handleEditTask = useCallback((task) => { setEditingTask(task); setIsModalOpen(true); }, []);
 
   const handleSaveTask = async (taskData) => {
-    if (taskData.id) {
-      await updateTask(taskData.id, taskData);
-      toast.success('Task updated!');
-    } else {
-      await addTask(taskData);
-      toast.success('Task created!');
-    }
+    if (taskData.id) { await updateTask(taskData.id, taskData); toast.success('Task updated!'); }
+    else { await addTask(taskData); toast.success('Task created!'); }
   };
 
   const handleMoveTask = async (taskId, column) => {
@@ -147,7 +141,8 @@ function AppContent() {
             title: task.title, description: task.description,
             column: task.column, priority: task.priority,
             isAITask: task.isAITask, tags: task.tags,
-            subtasks: task.subtasks, resources: task.resources
+            subtasks: task.subtasks, resources: task.resources,
+            dueDate: task.dueDate
           });
           toast.info('Task restored');
         }
@@ -155,9 +150,23 @@ function AppContent() {
     });
   }, [tasks, deleteTask, addTask, toast]);
 
+  const handleStartTimer = async (taskId) => {
+    if (activeTimerTaskId && activeTimerTaskId !== taskId) {
+      await stopTimer(activeTimerTaskId);
+    }
+    const result = await startTimer(taskId);
+    if (result.success) toast.info('Timer started');
+    else if (result.error) toast.error(result.error);
+  };
+
+  const handleStopTimer = async (taskId) => {
+    const result = await stopTimer(taskId);
+    if (result.success) toast.info('Timer stopped');
+  };
+
   const handleTagFilter = (tagId) => {
     if (tagFilter === tagId) setTagFilter(null);
-    else { setTagFilter(tagId); toast.info(`Filtering by: ${TAGS[tagId]?.label || tagId}`); }
+    else { setTagFilter(tagId); toast.info(`Filtering by: ${customTags[tagId]?.label || tagId}`); }
   };
   const clearTagFilter = () => setTagFilter(null);
   const focusSearch = useCallback(() => { searchInputRef.current?.focus(); }, []);
@@ -181,10 +190,7 @@ function AppContent() {
     onSearch: focusSearch, onCloseModal: closeModal, isModalOpen,
     focusedTaskId, allVisibleTaskIds,
     onFocusTask: setFocusedTaskId,
-    onEditFocused: () => {
-      const t = focusedTaskId && tasks[focusedTaskId];
-      if (t) handleEditTask(t);
-    },
+    onEditFocused: () => { const t = focusedTaskId && tasks[focusedTaskId]; if (t) handleEditTask(t); },
     onDeleteFocused: () => { if (focusedTaskId) handleDeleteTask(focusedTaskId); }
   });
 
@@ -201,14 +207,16 @@ function AppContent() {
         showArchive={showArchive} onToggleArchive={() => setShowArchive(!showArchive)}
         showStats={showStats} onToggleStats={() => setShowStats(!showStats)}
         searchInputRef={searchInputRef}
+        boards={boards} currentBoardId={currentBoardId}
+        onSwitchBoard={setCurrentBoardId}
+        onCreateBoard={createBoard} onUpdateBoard={updateBoard} onDeleteBoard={deleteBoard}
+        onOpenTagManager={() => setTagManagerOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {!connected && (
           <div className={`mb-4 p-3 rounded-xl flex items-center gap-2 text-sm
-            ${isDark
-              ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
-              : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
+            ${isDark ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
             <AlertTriangle size={15} />
             <span>Demo mode - API not connected</span>
           </div>
@@ -216,9 +224,7 @@ function AppContent() {
 
         {searchQuery && (
           <div className={`mb-4 p-3 rounded-xl flex items-center justify-between text-sm
-            ${isDark
-              ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
-              : 'bg-blue-50 border border-blue-200 text-blue-700'}`}>
+            ${isDark ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-700'}`}>
             <span className="flex items-center gap-2"><Search size={14} /> Searching for &ldquo;{searchQuery}&rdquo;</span>
             <button onClick={() => setSearchQuery('')} className="hover:underline font-medium">Clear</button>
           </div>
@@ -226,13 +232,11 @@ function AppContent() {
 
         {tagFilter && (
           <div className={`mb-4 p-3 rounded-xl flex items-center justify-between text-sm
-            ${isDark
-              ? 'bg-violet-500/10 border border-violet-500/20 text-violet-400'
-              : 'bg-violet-50 border border-violet-200 text-violet-700'}`}>
+            ${isDark ? 'bg-violet-500/10 border border-violet-500/20 text-violet-400' : 'bg-violet-50 border border-violet-200 text-violet-700'}`}>
             <span className="flex items-center gap-2">
               <Tag size={14} /> Filtering by tag:
-              <span className={`px-2 py-0.5 rounded-full text-white text-xs ${TAGS[tagFilter]?.color}`}>
-                {TAGS[tagFilter]?.label}
+              <span className={`px-2 py-0.5 rounded-full text-white text-xs ${customTags[tagFilter]?.color || 'bg-slate-500'}`}>
+                {customTags[tagFilter]?.label || tagFilter}
               </span>
             </span>
             <button onClick={clearTagFilter} className="hover:underline font-medium">Clear filter</button>
@@ -240,7 +244,7 @@ function AppContent() {
         )}
 
         {showStats && <StatsPanel tasks={tasks} />}
-        <LearningDashboard tasks={tasks} onTagFilter={handleTagFilter} />
+        <LearningDashboard tasks={tasks} onTagFilter={handleTagFilter} customTags={customTags} />
         <CurrentlyWorking tasks={currentlyWorking} />
 
         {totalTasks === 0 && !searchQuery && !tagFilter && !showArchive && (
@@ -249,24 +253,28 @@ function AppContent() {
 
         {showArchive ? (
           <div className="mb-6">
-            <Column
-              columnId="completed" tasks={archivedTasks}
+            <Column columnId="completed" tasks={archivedTasks}
               onMoveTask={handleMoveTask} onEditTask={handleEditTask}
               onDeleteTask={handleDeleteTask} onUpdateSubtask={updateSubtasks}
               onTagFilter={handleTagFilter} activeTagFilter={tagFilter}
               isArchive={true} focusedTaskId={focusedTaskId}
+              customTags={customTags}
+              onStartTimer={handleStartTimer} onStopTimer={handleStopTimer}
+              activeTimerTaskId={activeTimerTaskId}
             />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {Object.keys(COLUMNS).map(columnId => (
-              <Column
-                key={columnId} columnId={columnId}
+              <Column key={columnId} columnId={columnId}
                 tasks={filterTasksByTag(getTasksByColumn(columnId, searchQuery))}
                 onMoveTask={handleMoveTask} onEditTask={handleEditTask}
                 onDeleteTask={handleDeleteTask} onUpdateSubtask={updateSubtasks}
                 onTagFilter={handleTagFilter} activeTagFilter={tagFilter}
                 focusedTaskId={focusedTaskId}
+                customTags={customTags}
+                onStartTimer={handleStartTimer} onStopTimer={handleStopTimer}
+                activeTimerTaskId={activeTimerTaskId}
               />
             ))}
           </div>
@@ -274,8 +282,7 @@ function AppContent() {
 
         <ActivityFeed history={history} />
 
-        <footer className={`text-center py-8 text-sm transition-colors duration-300
-          ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
+        <footer className={`text-center py-8 text-sm transition-colors duration-300 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
           <p className="flex items-center justify-center gap-2">
             Built with <Heart size={14} className="text-red-500" /> by ClosedBot
             <Shield size={14} /> for Rohail
@@ -286,14 +293,16 @@ function AppContent() {
             {pendingSync > 0 && <span className="text-amber-400">&middot; {pendingSync} queued</span>}
             {showArchive && <span>&middot; Archive</span>}
           </p>
-          <p className={`text-[10px] mt-3 flex items-center justify-center gap-1
-            ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>
+          <p className={`text-[10px] mt-3 flex items-center justify-center gap-1 ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>
             <Keyboard size={11} /> N: New &middot; j/k: Navigate &middot; Enter: Edit &middot; D: Delete &middot; /: Search &middot; R: Refresh
           </p>
         </footer>
       </main>
 
-      <TaskModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveTask} editTask={editingTask} />
+      <TaskModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveTask}
+        editTask={editingTask} customTags={customTags} />
+      <TagManager isOpen={tagManagerOpen} onClose={() => setTagManagerOpen(false)}
+        tags={customTags} onCreate={createTag} onUpdate={updateTag} onDelete={deleteTag} />
       <ToastContainer />
     </div>
   );

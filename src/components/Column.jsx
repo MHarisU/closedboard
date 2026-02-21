@@ -4,13 +4,13 @@ import { ClipboardList, Zap, CheckCircle, Archive, Sparkles } from 'lucide-react
 import TaskCard from './TaskCard';
 import { COLUMNS } from '../utils/constants';
 
-const columnIcons = {
-  backlog: ClipboardList,
-  inProgress: Zap,
-  completed: CheckCircle,
-};
+const columnIcons = { backlog: ClipboardList, inProgress: Zap, completed: CheckCircle };
 
-export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDeleteTask, onUpdateSubtask, onTagFilter, activeTagFilter, isArchive = false, focusedTaskId }) {
+export default function Column({
+  columnId, tasks, onMoveTask, onEditTask, onDeleteTask, onUpdateSubtask,
+  onTagFilter, activeTagFilter, isArchive = false, focusedTaskId,
+  customTags, onStartTimer, onStopTimer, activeTimerTaskId
+}) {
   const { isDark } = useTheme();
   const [isDragOver, setIsDragOver] = useState(false);
   const column = COLUMNS[columnId];
@@ -21,13 +21,11 @@ export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDele
     inProgress: isDark ? 'from-blue-500/10 to-transparent' : 'from-blue-50 to-transparent',
     completed: isDark ? 'from-emerald-500/10 to-transparent' : 'from-emerald-50 to-transparent'
   };
-
   const iconBg = {
     backlog: isDark ? 'bg-slate-500/20' : 'bg-slate-100',
     inProgress: isDark ? 'bg-blue-500/20' : 'bg-blue-100',
     completed: isDark ? 'bg-emerald-500/20' : 'bg-emerald-100'
   };
-
   const iconColor = {
     backlog: isDark ? 'text-slate-400' : 'text-slate-600',
     inProgress: isDark ? 'text-blue-400' : 'text-blue-600',
@@ -36,42 +34,29 @@ export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDele
 
   const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setIsDragOver(true); };
   const handleDragLeave = () => setIsDragOver(false);
-  const handleDrop = (e) => {
-    e.preventDefault(); setIsDragOver(false);
-    const taskId = e.dataTransfer.getData('taskId');
-    if (taskId) onMoveTask(taskId, columnId);
-  };
+  const handleDrop = (e) => { e.preventDefault(); setIsDragOver(false); const taskId = e.dataTransfer.getData('taskId'); if (taskId) onMoveTask(taskId, columnId); };
 
   const EmptyIcon = isArchive ? Archive : (columnId === 'completed' ? Sparkles : columnIcons[columnId]);
-  const emptyTexts = {
-    backlog: 'Add tasks to plan your work',
-    inProgress: 'Drag tasks here to start',
-    completed: 'Completed tasks appear here'
-  };
+  const emptyTexts = { backlog: 'Add tasks to plan your work', inProgress: 'Drag tasks here to start', completed: 'Completed tasks appear here' };
 
   return (
-    <div
-      className={`flex flex-col rounded-2xl border transition-all duration-200
-        ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white/50 border-slate-200 shadow-sm'}
-        ${isDragOver ? 'ring-2 ring-blue-500/50 border-blue-500/50' : ''}`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div className={`flex flex-col rounded-2xl border transition-all duration-200
+      ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-white/50 border-slate-200 shadow-sm'}
+      ${isDragOver ? 'ring-2 ring-blue-500/50 border-blue-500/50' : ''}`}
+      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+
       <div className={`p-4 rounded-t-2xl bg-gradient-to-b ${gradients[columnId]}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${iconBg[columnId]}`}>
-              {isArchive
-                ? <Archive size={16} className={isDark ? 'text-slate-400' : 'text-slate-600'} />
+              {isArchive ? <Archive size={16} className={isDark ? 'text-slate-400' : 'text-slate-600'} />
                 : <ColumnIcon size={16} className={iconColor[columnId]} />}
             </div>
             <h3 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-800'}`}>
               {isArchive ? 'Archive' : column.label}
             </h3>
           </div>
-          <span className={`text-xs px-2.5 py-1 rounded-full font-medium
-            ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+          <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
             {tasks.length}
           </span>
         </div>
@@ -80,21 +65,19 @@ export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDele
       <div className="flex-1 p-3 min-h-[200px]">
         {tasks.length === 0 ? (
           <div className={`text-center py-12 px-4 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
-            <div className="flex justify-center mb-3 opacity-50">
-              <EmptyIcon size={28} />
-            </div>
-            <p className="text-xs">
-              {isArchive ? 'Completed tasks appear here' : emptyTexts[columnId]}
-            </p>
+            <div className="flex justify-center mb-3 opacity-50"><EmptyIcon size={28} /></div>
+            <p className="text-xs">{isArchive ? 'Completed tasks appear here' : emptyTexts[columnId]}</p>
           </div>
         ) : (
           tasks.map(task => (
-            <TaskCard
-              key={task.id} task={task}
+            <TaskCard key={task.id} task={task}
               onMove={onMoveTask} onEdit={onEditTask}
               onDelete={onDeleteTask} onUpdateSubtask={onUpdateSubtask}
               onTagFilter={onTagFilter} activeTagFilter={activeTagFilter}
               isFocused={focusedTaskId === task.id}
+              customTags={customTags}
+              onStartTimer={onStartTimer} onStopTimer={onStopTimer}
+              activeTimerTaskId={activeTimerTaskId}
             />
           ))
         )}
