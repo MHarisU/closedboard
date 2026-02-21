@@ -20,6 +20,7 @@ function AppContent() {
     loading,
     connected,
     lastSync,
+    pendingSync,
     addTask,
     moveTask,
     updateTask,
@@ -255,8 +256,9 @@ function AppContent() {
           </p>
           <p className="text-xs mt-2 flex items-center justify-center gap-2">
             <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-            {connected ? 'Live sync (30s)' : 'Offline mode'}
-            {showArchive && <span>• 📦 Archive</span>}
+            {connected ? 'Live (SSE)' : 'Offline mode'}
+            {pendingSync > 0 && <span className="text-amber-400">• {pendingSync} queued</span>}
+            {showArchive && <span>• Archive</span>}
           </p>
           <p className={`text-[10px] mt-3 ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>
             ⌨️ N: New • R: Refresh • /: Search • Esc: Close

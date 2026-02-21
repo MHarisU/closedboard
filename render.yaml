@@ -11,3 +11,5 @@ services:
         value: production
       - key: API_SECRET
         sync: false
+      - key: CORS_ORIGINS
+        value: https://mharisu.github.io
