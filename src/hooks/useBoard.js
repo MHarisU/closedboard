@@ -7,7 +7,7 @@ import {
   fetchCustomTags, createCustomTag, updateCustomTag, deleteCustomTag
 } from '../utils/api';
 import { enqueue, getPendingCount, replayQueue } from '../utils/syncQueue';
-import { DEFAULT_TAGS, getDueDateStatus } from '../utils/constants';
+import { DEFAULT_TAGS } from '../utils/constants';
 
 const BOARD_KEY = 'closedboard_current_board';
 
@@ -70,9 +70,11 @@ export const useBoard = () => {
     })();
   }, []);
 
-  // Reload tasks when board changes
+  // Reload tasks when board changes (skip initial mount — already loaded above)
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    if (!loading) refresh(currentBoardId);
+    if (!hasInitialized.current) { hasInitialized.current = true; return; }
+    refresh(currentBoardId);
   }, [currentBoardId]);
 
   // SSE
@@ -112,7 +114,16 @@ export const useBoard = () => {
 
     source.addEventListener('board_created', (e) => { const { board } = JSON.parse(e.data); setBoards(prev => [...prev, board]); });
     source.addEventListener('board_updated', (e) => { const { board } = JSON.parse(e.data); setBoards(prev => prev.map(b => b.id === board.id ? board : b)); });
-    source.addEventListener('board_deleted', (e) => { const { boardId } = JSON.parse(e.data); setBoards(prev => prev.filter(b => b.id !== boardId)); });
+    source.addEventListener('board_deleted', (e) => {
+      const { boardId } = JSON.parse(e.data);
+      setBoards(prev => prev.filter(b => b.id !== boardId));
+      if (boardId === boardIdRef.current) {
+        setCurrentBoardIdRaw('default');
+        boardIdRef.current = 'default';
+        localStorage.setItem(BOARD_KEY, 'default');
+        refresh('default');
+      }
+    });
 
     source.addEventListener('tag_created', (e) => { const { tag } = JSON.parse(e.data); setCustomTags(prev => ({ ...prev, [tag.id]: tag })); });
     source.addEventListener('tag_updated', (e) => { const { tag } = JSON.parse(e.data); setCustomTags(prev => ({ ...prev, [tag.id]: tag })); });
@@ -131,7 +142,7 @@ export const useBoard = () => {
     const optTask = {
       id: optId, ...task, createdAt: Date.now(), boardId: boardIdRef.current,
       isAITask: task.isAITask || false, tags: task.tags || [], subtasks: task.subtasks || [],
-      timeEntries: [], dueDate: task.dueDate || null
+      timeEntries: task.timeEntries || [], dueDate: task.dueDate || null
     };
     setData(prev => ({
       ...prev, tasks: { ...prev.tasks, [optId]: optTask },

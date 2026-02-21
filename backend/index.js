@@ -220,6 +220,7 @@ app.put('/api/boards/:id', requireAuth, (req, res) => {
 });
 
 app.delete('/api/boards/:id', requireAuth, (req, res) => {
+  if (req.params.id === 'default') return res.status(400).json({ error: 'Cannot delete the default board' });
   const count = queryAll('SELECT id FROM boards').length;
   if (count <= 1) return res.status(400).json({ error: 'Cannot delete the last board' });
   const taskCount = queryAll('SELECT id FROM tasks WHERE board_id = ?', [req.params.id]).length;
@@ -306,7 +307,7 @@ app.post('/api/tasks', requireAuth, (req, res) => {
     isAITask: b.isAITask || false, tags: b.tags || [],
     subtasks: b.subtasks || [], resources: b.resources || [],
     createdAt: Date.now(), completedAt: null,
-    dueDate: b.dueDate || null, timeEntries: [],
+    dueDate: b.dueDate || null, timeEntries: b.timeEntries || [],
     boardId: b.boardId || 'default'
   };
   insertTask(task);

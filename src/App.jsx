@@ -142,7 +142,7 @@ function AppContent() {
             column: task.column, priority: task.priority,
             isAITask: task.isAITask, tags: task.tags,
             subtasks: task.subtasks, resources: task.resources,
-            dueDate: task.dueDate
+            dueDate: task.dueDate, timeEntries: task.timeEntries
           });
           toast.info('Task restored');
         }

@@ -16,6 +16,7 @@ export default function BoardSelector({ boards, currentBoardId, onSwitch, onCrea
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState('blue');
+  const [error, setError] = useState('');
   const dropdownRef = useRef(null);
 
   const current = boards.find(b => b.id === currentBoardId) || boards[0] || { name: 'My Board', color: 'blue' };
@@ -42,7 +43,12 @@ export default function BoardSelector({ boards, currentBoardId, onSwitch, onCrea
 
   const handleDelete = async (id) => {
     if (boards.length <= 1) return;
-    await onDelete(id);
+    setError('');
+    const result = await onDelete(id);
+    if (result && !result.success && result.error) {
+      setError(result.error);
+      setTimeout(() => setError(''), 4000);
+    }
   };
 
   return (
@@ -114,6 +120,12 @@ export default function BoardSelector({ boards, currentBoardId, onSwitch, onCrea
               </div>
             ))}
           </div>
+
+          {error && (
+            <div className={`px-3 py-2 text-xs ${isDark ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
+              {error}
+            </div>
+          )}
 
           <div className={`border-t ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
             {isCreating ? (
