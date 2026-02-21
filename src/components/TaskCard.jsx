@@ -1,49 +1,46 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { PRIORITIES, TAGS, formatTime } from '../utils/constants';
+import { PRIORITIES, TAGS, COLUMNS, formatTime } from '../utils/constants';
 
-export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter }) {
+export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter, isFocused }) {
   const { isDark } = useTheme();
   const [expandedSubtasks, setExpandedSubtasks] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const touchStart = useRef({ x: 0, y: 0 });
   const cardRef = useRef(null);
-  
+
   const priority = PRIORITIES[task.priority];
-  
+
+  useEffect(() => {
+    if (isFocused && cardRef.current) {
+      cardRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isFocused]);
+
   const handleDragStart = (e) => {
     e.dataTransfer.setData('taskId', task.id);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  // Touch handlers for swipe
   const handleTouchStart = (e) => {
-    touchStart.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY
-    };
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     setIsSwiping(false);
   };
 
   const handleTouchMove = (e) => {
     const deltaX = e.touches[0].clientX - touchStart.current.x;
     const deltaY = e.touches[0].clientY - touchStart.current.y;
-    
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
       setIsSwiping(true);
-      const clampedX = Math.max(-100, Math.min(100, deltaX));
-      setSwipeX(clampedX);
+      setSwipeX(Math.max(-100, Math.min(100, deltaX)));
     }
   };
 
   const handleTouchEnd = () => {
     if (Math.abs(swipeX) > 60) {
-      if (swipeX > 0 && task.column !== 'completed') {
-        onMove(task.id, 'completed');
-      } else if (swipeX < 0) {
-        onDelete(task.id);
-      }
+      if (swipeX > 0 && task.column !== 'completed') onMove(task.id, 'completed');
+      else if (swipeX < 0) onDelete(task.id);
     }
     setSwipeX(0);
     setIsSwiping(false);
@@ -55,18 +52,10 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
   };
 
   const priorityStyles = {
-    low: isDark 
-      ? 'bg-slate-500/20 text-slate-400 border-slate-500/30' 
-      : 'bg-slate-100 text-slate-600 border-slate-200',
-    medium: isDark 
-      ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' 
-      : 'bg-amber-50 text-amber-600 border-amber-200',
-    high: isDark 
-      ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' 
-      : 'bg-orange-50 text-orange-600 border-orange-200',
-    urgent: isDark 
-      ? 'bg-red-500/20 text-red-400 border-red-500/30' 
-      : 'bg-red-50 text-red-600 border-red-200'
+    low: isDark ? 'bg-slate-500/20 text-slate-400 border-slate-500/30' : 'bg-slate-100 text-slate-600 border-slate-200',
+    medium: isDark ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-amber-50 text-amber-600 border-amber-200',
+    high: isDark ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-orange-50 text-orange-600 border-orange-200',
+    urgent: isDark ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 text-red-600 border-red-200'
   };
 
   const subtasks = task.subtasks || [];
@@ -86,11 +75,13 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
     return '';
   };
 
+  const moveTargets = Object.entries(COLUMNS).filter(([id]) => id !== task.column);
+  const moveIcons = { backlog: '📋', inProgress: '🚀', completed: '✅' };
+
   return (
     <div className="relative mb-3 overflow-hidden rounded-xl">
       {/* Swipe background */}
-      <div className={`absolute inset-0 flex items-center justify-between px-4 transition-colors
-        ${getSwipeBackground()}`}>
+      <div className={`absolute inset-0 flex items-center justify-between px-4 transition-colors ${getSwipeBackground()}`}>
         <span className={`text-emerald-500 font-medium text-sm ${swipeX > 30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
           ✓ Complete
         </span>
@@ -98,24 +89,26 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
           Delete 🗑️
         </span>
       </div>
-      
+
       <div
         ref={cardRef}
+        tabIndex={0}
         draggable={!isSwiping}
         onDragStart={handleDragStart}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{ transform: `translateX(${swipeX}px)` }}
-        className={`task-card relative rounded-xl p-4 border transition-all duration-200
-          ${isDark 
-            ? 'bg-slate-800/95 border-slate-700/50 hover:border-slate-600' 
+        className={`task-card relative rounded-xl p-4 border transition-all duration-200 outline-none
+          ${isDark
+            ? 'bg-slate-800/95 border-slate-700/50 hover:border-slate-600'
             : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'}
           ${task.isAITask ? 'border-l-4 border-l-blue-500' : ''}
           ${task.column === 'completed' ? 'opacity-70' : ''}
-          ${isSwiping ? 'transition-none' : 'transition-transform'}`}
+          ${isSwiping ? 'transition-none' : 'transition-transform'}
+          ${isFocused ? 'ring-2 ring-blue-500 ring-offset-1 ' + (isDark ? 'ring-offset-slate-900' : 'ring-offset-white') : ''}`}
       >
-        {/* Tags - Clickable */}
+        {/* Tags */}
         {task.tags && task.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2.5">
             {task.tags.map(tagId => {
@@ -149,7 +142,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
             {priority.icon} {priority.label}
           </span>
         </div>
-        
+
         {/* Description */}
         {task.description && (
           <p className={`text-xs mb-3 line-clamp-2 leading-relaxed
@@ -173,10 +166,10 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
                 {completedSubtasks}/{subtasks.length}
               </span>
             </button>
-            
+
             <div className={`w-full h-1.5 rounded-full overflow-hidden
               ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
                 style={{ width: `${subtaskProgress}%` }}
               />
@@ -185,7 +178,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
             {expandedSubtasks && (
               <div className="mt-2.5 space-y-1.5">
                 {subtasks.map((subtask, index) => (
-                  <label 
+                  <label
                     key={index}
                     className={`flex items-center gap-2.5 text-xs cursor-pointer p-1.5 -mx-1.5 rounded-lg transition-colors
                       ${isDark ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}
@@ -198,7 +191,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
                         ${isDark ? 'border-slate-600 bg-slate-700' : 'border-slate-300 bg-white'}`}
                     />
                     <span className={`transition-all duration-200 ${
-                      subtask.done 
+                      subtask.done
                         ? 'line-through ' + (isDark ? 'text-slate-500' : 'text-slate-400')
                         : isDark ? 'text-slate-300' : 'text-slate-600'
                     }`}>
@@ -210,7 +203,24 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
             )}
           </div>
         )}
-        
+
+        {/* Quick move buttons */}
+        <div className={`flex gap-1 mb-2`}>
+          {moveTargets.map(([colId]) => (
+            <button
+              key={colId}
+              onClick={(e) => { e.stopPropagation(); onMove(task.id, colId); }}
+              className={`text-[10px] px-2 py-1 rounded-lg transition-colors font-medium
+                ${isDark
+                  ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
+              title={`Move to ${COLUMNS[colId].title}`}
+            >
+              {moveIcons[colId]} {COLUMNS[colId].title.split(' ').slice(1).join(' ')}
+            </button>
+          ))}
+        </div>
+
         {/* Footer */}
         <div className={`flex items-center justify-between text-[11px] pt-2 border-t
           ${isDark ? 'border-slate-700/50 text-slate-500' : 'border-slate-100 text-slate-400'}`}>
@@ -218,19 +228,19 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
             {task.completedAt ? `Done ${formatTime(task.completedAt)}` : formatTime(task.createdAt)}
           </span>
           <div className="flex gap-0.5">
-            <button 
+            <button
               onClick={() => onEdit(task)}
               className={`p-1.5 rounded-lg transition-colors
                 ${isDark ? 'hover:bg-slate-700 hover:text-slate-300' : 'hover:bg-slate-100 hover:text-slate-600'}`}
-              title="Edit"
+              title="Edit (Enter)"
             >
               ✏️
             </button>
-            <button 
+            <button
               onClick={() => onDelete(task.id)}
               className={`p-1.5 rounded-lg transition-colors
                 ${isDark ? 'hover:bg-red-500/20 hover:text-red-400' : 'hover:bg-red-50 hover:text-red-500'}`}
-              title="Delete"
+              title="Delete (D)"
             >
               🗑️
             </button>

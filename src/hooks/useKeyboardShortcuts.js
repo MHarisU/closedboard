@@ -1,42 +1,64 @@
 import { useEffect, useCallback } from 'react';
 
-export function useKeyboardShortcuts({ 
-  onNewTask, 
-  onRefresh, 
-  onSearch, 
-  onCloseModal,
-  isModalOpen 
+export function useKeyboardShortcuts({
+  onNewTask, onRefresh, onSearch, onCloseModal, isModalOpen,
+  focusedTaskId, allVisibleTaskIds, onFocusTask, onEditFocused, onDeleteFocused
 }) {
   const handleKeyDown = useCallback((e) => {
-    // Don't trigger if typing in input/textarea
     const target = e.target;
     const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-    
-    // Escape always works
+
     if (e.key === 'Escape') {
-      onCloseModal?.();
+      if (focusedTaskId) {
+        onFocusTask?.(null);
+      } else {
+        onCloseModal?.();
+      }
       return;
     }
 
-    // Don't trigger shortcuts when modal is open or typing
     if (isModalOpen || isInput) return;
 
-    // Keyboard shortcuts
-    switch (e.key.toLowerCase()) {
+    const key = e.key.toLowerCase();
+    const ids = allVisibleTaskIds || [];
+
+    switch (key) {
       case 'n':
         e.preventDefault();
         onNewTask?.();
         break;
       case 'r':
-        e.preventDefault();
-        onRefresh?.();
+        if (!focusedTaskId) { e.preventDefault(); onRefresh?.(); }
         break;
       case '/':
         e.preventDefault();
         onSearch?.();
         break;
+      case 'j':
+      case 'arrowdown': {
+        if (ids.length === 0) break;
+        e.preventDefault();
+        const cur = ids.indexOf(focusedTaskId);
+        onFocusTask?.(ids[cur < ids.length - 1 ? cur + 1 : 0]);
+        break;
+      }
+      case 'k':
+      case 'arrowup': {
+        if (ids.length === 0) break;
+        e.preventDefault();
+        const cur = ids.indexOf(focusedTaskId);
+        onFocusTask?.(ids[cur > 0 ? cur - 1 : ids.length - 1]);
+        break;
+      }
+      case 'enter':
+        if (focusedTaskId) { e.preventDefault(); onEditFocused?.(); }
+        break;
+      case 'd':
+        if (focusedTaskId) { e.preventDefault(); onDeleteFocused?.(); onFocusTask?.(null); }
+        break;
     }
-  }, [onNewTask, onRefresh, onSearch, onCloseModal, isModalOpen]);
+  }, [onNewTask, onRefresh, onSearch, onCloseModal, isModalOpen,
+      focusedTaskId, allVisibleTaskIds, onFocusTask, onEditFocused, onDeleteFocused]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
