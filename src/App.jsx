@@ -15,6 +15,7 @@ import TaskModal from './components/TaskModal';
 import TagManager from './components/TagManager';
 import ToastContainer from './components/ToastContainer';
 import LearningDashboard from './components/LearningDashboard';
+import MorningBriefing, { shouldShowBriefing, dismissBriefing } from './components/MorningBriefing';
 import { COLUMNS } from './utils/constants';
 
 function SkeletonCard({ isDark }) {
@@ -111,6 +112,7 @@ function AppContent() {
   const [tagFilter, setTagFilter] = useState(null);
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [showBriefing, setShowBriefing] = useState(() => shouldShowBriefing());
   const searchInputRef = useRef(null);
 
   const handleNewTask = useCallback(() => { setEditingTask(null); setIsModalOpen(true); }, []);
@@ -197,6 +199,17 @@ function AppContent() {
   const currentlyWorking = getCurrentlyWorking();
 
   if (loading) return <SkeletonBoard isDark={isDark} />;
+
+  if (showBriefing && Object.keys(tasks).length > 0) {
+    return (
+      <MorningBriefing
+        tasks={tasks}
+        customTags={customTags}
+        history={history}
+        onDismiss={() => { dismissBriefing(); setShowBriefing(false); }}
+      />
+    );
+  }
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
