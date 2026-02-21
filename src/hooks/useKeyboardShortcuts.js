@@ -2,9 +2,12 @@ import { useEffect, useCallback } from 'react';
 
 export function useKeyboardShortcuts({
   onNewTask, onRefresh, onSearch, onCloseModal, isModalOpen,
-  focusedTaskId, allVisibleTaskIds, onFocusTask, onEditFocused, onDeleteFocused
+  focusedTaskId, allVisibleTaskIds, onFocusTask, onEditFocused, onDeleteFocused,
+  disabled = false
 }) {
   const handleKeyDown = useCallback((e) => {
+    if (disabled) return;
+
     const target = e.target;
     const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
@@ -58,7 +61,7 @@ export function useKeyboardShortcuts({
         break;
     }
   }, [onNewTask, onRefresh, onSearch, onCloseModal, isModalOpen,
-      focusedTaskId, allVisibleTaskIds, onFocusTask, onEditFocused, onDeleteFocused]);
+      focusedTaskId, allVisibleTaskIds, onFocusTask, onEditFocused, onDeleteFocused, disabled]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);

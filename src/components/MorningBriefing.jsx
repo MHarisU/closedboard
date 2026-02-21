@@ -5,7 +5,7 @@ import {
   AlertTriangle, Clock, ArrowRight, Zap, CalendarClock,
   Circle, CircleDot, AlertCircle, Target
 } from 'lucide-react';
-import { formatDueDate, formatDuration, totalTimeMs, isLearningTask, getLearningTopics } from '../utils/constants';
+import { formatDueDate, formatDuration, isLearningTask, getLearningTopics } from '../utils/constants';
 
 const DISMISSAL_KEY = 'closedboard_briefing_dismissed';
 
@@ -95,7 +95,7 @@ export default function MorningBriefing({ tasks, customTags, history, onDismiss 
     const focusedIds = new Set([...overdueIds, ...urgentIds, ...highInProgress.map(t => t.id)]);
     const learningTasks = active
       .filter(t => isLearningTask(t, customTags) && !focusedIds.has(t.id))
-      .sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority])
+      .sort((a, b) => (priorityWeight[a.priority] ?? 2) - (priorityWeight[b.priority] ?? 2))
       .slice(0, 3);
 
     // --- Focus order ---
@@ -151,11 +151,14 @@ export default function MorningBriefing({ tasks, customTags, history, onDismiss 
   };
 
   const formatOverdueSince = (dueDate) => {
-    const days = Math.floor((Date.now() - dueDate) / 86400000);
-    if (days === 0) return 'since today';
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const days = Math.round((now.getTime() - due.getTime()) / 86400000);
+    if (days <= 0) return 'since today';
     if (days === 1) return 'since yesterday';
-    const d = new Date(dueDate);
-    return `since ${d.toLocaleDateString('en-US', { weekday: 'long' })}`;
+    return `since ${new Date(dueDate).toLocaleDateString('en-US', { weekday: 'long' })}`;
   };
 
   const greeting = () => {

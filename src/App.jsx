@@ -193,7 +193,8 @@ function AppContent() {
     focusedTaskId, allVisibleTaskIds,
     onFocusTask: setFocusedTaskId,
     onEditFocused: () => { const t = focusedTaskId && tasks[focusedTaskId]; if (t) handleEditTask(t); },
-    onDeleteFocused: () => { if (focusedTaskId) handleDeleteTask(focusedTaskId); }
+    onDeleteFocused: () => { if (focusedTaskId) handleDeleteTask(focusedTaskId); },
+    disabled: showBriefing
   });
 
   const currentlyWorking = getCurrentlyWorking();
