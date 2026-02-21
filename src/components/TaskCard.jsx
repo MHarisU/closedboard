@@ -3,11 +3,11 @@ import { useTheme } from '../contexts/ThemeContext';
 import {
   ClipboardList, Zap, CheckCircle, Check, Trash2, Pencil, Bot,
   Circle, CircleDot, AlertCircle, Flame, ChevronDown,
-  Play, Pause, Clock, CalendarClock
+  Play, Pause, Clock, CalendarClock, Lock, GitBranch
 } from 'lucide-react';
 import {
   PRIORITIES, COLUMNS, formatTime, formatDuration, totalTimeMs,
-  formatDueDate, getDueDateStatus
+  formatDueDate, getDueDateStatus, isTaskBlocked, getBlockingCount
 } from '../utils/constants';
 
 const columnIcons = { backlog: ClipboardList, inProgress: Zap, completed: CheckCircle };
@@ -15,7 +15,7 @@ const priorityIcons = { low: Circle, medium: CircleDot, high: AlertCircle, urgen
 
 export default function TaskCard({
   task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter,
-  isFocused, customTags, onStartTimer, onStopTimer, activeTimerTaskId
+  isFocused, customTags, onStartTimer, onStopTimer, activeTimerTaskId, allTasks
 }) {
   const { isDark } = useTheme();
   const [expandedSubtasks, setExpandedSubtasks] = useState(false);
@@ -95,6 +95,8 @@ export default function TaskCard({
       : '';
 
   const tags = customTags || {};
+  const blocked = isTaskBlocked(task, allTasks || {});
+  const blockingCount = getBlockingCount(task.id, allTasks || {});
 
   return (
     <div className="relative mb-3 overflow-hidden rounded-xl">
@@ -128,6 +130,20 @@ export default function TaskCard({
                 : isDark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
             <CalendarClock size={10} />
             {dueStatus === 'overdue' ? 'Overdue' : dueStatus === 'soon' ? 'Due soon' : 'Due'} {formatDueDate(task.dueDate)}
+          </div>
+        )}
+
+        {/* Blocked / Blocks badges */}
+        {blocked && task.column !== 'completed' && (
+          <div className={`flex items-center gap-1 text-[10px] font-medium mb-2 px-2 py-0.5 rounded-full w-fit
+            ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
+            <Lock size={10} /> Blocked
+          </div>
+        )}
+        {blockingCount > 0 && (
+          <div className={`flex items-center gap-1 text-[10px] font-medium mb-2 px-2 py-0.5 rounded-full w-fit
+            ${isDark ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+            <GitBranch size={10} /> Blocks {blockingCount} task{blockingCount > 1 ? 's' : ''}
           </div>
         )}
 
@@ -202,12 +218,15 @@ export default function TaskCard({
         <div className="flex gap-1 mb-2">
           {moveTargets.map(([colId]) => {
             const ColIcon = columnIcons[colId];
+            const isDisabled = blocked && colId === 'inProgress';
             return (
-              <button key={colId} onClick={(e) => { e.stopPropagation(); onMove(task.id, colId); }}
+              <button key={colId} disabled={isDisabled}
+                onClick={(e) => { e.stopPropagation(); if (!isDisabled) onMove(task.id, colId); }}
                 className={`text-[10px] px-2 py-1 rounded-lg transition-colors font-medium inline-flex items-center gap-1
-                  ${isDark ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
-                title={`Move to ${COLUMNS[colId].label}`}>
-                <ColIcon size={11} />
+                  ${isDisabled ? 'opacity-40 cursor-not-allowed ' + (isDark ? 'bg-slate-700/30 text-slate-500' : 'bg-slate-100 text-slate-400')
+                    : isDark ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
+                title={isDisabled ? 'Task is blocked' : `Move to ${COLUMNS[colId].label}`}>
+                {isDisabled ? <Lock size={11} /> : <ColIcon size={11} />}
                 {COLUMNS[colId].label}
               </button>
             );

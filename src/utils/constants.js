@@ -82,6 +82,19 @@ export const getTaskTopic = (task, tags) => {
   return task.tags?.find(t => tagMap[t]?.isLearningTopic) || null;
 };
 
+export const isTaskBlocked = (task, allTasks) => {
+  if (!task.blockedBy || task.blockedBy.length === 0) return false;
+  return task.blockedBy.some(bid => {
+    const blocker = allTasks[bid];
+    return blocker && blocker.column !== 'completed';
+  });
+};
+
+export const getBlockingCount = (taskId, allTasks) =>
+  Object.values(allTasks).filter(t =>
+    t.blockedBy?.includes(taskId) && t.column !== 'completed'
+  ).length;
+
 export const getLearningTopics = (tags) => {
   const tagMap = tags || DEFAULT_TAGS;
   return Object.entries(tagMap).filter(([_, t]) => t.isLearningTopic).map(([id]) => id);

@@ -68,7 +68,8 @@ function rowToTask(row) {
     createdAt: row.created_at, completedAt: row.completed_at,
     dueDate: row.due_date || null,
     timeEntries: JSON.parse(row.time_entries || '[]'),
-    boardId: row.board_id || 'default'
+    boardId: row.board_id || 'default',
+    blockedBy: JSON.parse(row.blocked_by || '[]')
   };
 }
 
@@ -121,12 +122,13 @@ function addHistory(action, taskId, message, boardId = 'default') {
 function insertTask(task) {
   db.run(
     `INSERT INTO tasks (id, title, description, column_name, priority, is_ai_task,
-     tags, subtasks, resources, created_at, completed_at, due_date, time_entries, board_id)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     tags, subtasks, resources, created_at, completed_at, due_date, time_entries, board_id, blocked_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [task.id, task.title, task.description, task.column, task.priority,
      task.isAITask ? 1 : 0, JSON.stringify(task.tags), JSON.stringify(task.subtasks),
      JSON.stringify(task.resources), task.createdAt, task.completedAt,
-     task.dueDate || null, JSON.stringify(task.timeEntries || []), task.boardId || 'default']
+     task.dueDate || null, JSON.stringify(task.timeEntries || []), task.boardId || 'default',
+     JSON.stringify(task.blockedBy || [])]
   );
 }
 
@@ -134,13 +136,13 @@ function updateTaskRow(task) {
   db.run(
     `UPDATE tasks SET title=?, description=?, column_name=?, priority=?, is_ai_task=?,
      tags=?, subtasks=?, resources=?, created_at=?, completed_at=?,
-     due_date=?, time_entries=?, board_id=? WHERE id=?`,
+     due_date=?, time_entries=?, board_id=?, blocked_by=? WHERE id=?`,
     [task.title, task.description, task.column, task.priority,
      task.isAITask ? 1 : 0, JSON.stringify(task.tags || []),
      JSON.stringify(task.subtasks || []), JSON.stringify(task.resources || []),
      task.createdAt, task.completedAt,
      task.dueDate || null, JSON.stringify(task.timeEntries || []),
-     task.boardId || 'default', task.id]
+     task.boardId || 'default', JSON.stringify(task.blockedBy || []), task.id]
   );
 }
 
@@ -308,7 +310,7 @@ app.post('/api/tasks', requireAuth, (req, res) => {
     subtasks: b.subtasks || [], resources: b.resources || [],
     createdAt: Date.now(), completedAt: null,
     dueDate: b.dueDate || null, timeEntries: b.timeEntries || [],
-    boardId: b.boardId || 'default'
+    boardId: b.boardId || 'default', blockedBy: b.blockedBy || []
   };
   insertTask(task);
   addHistory('created', id, `Created: "${task.title}"`, task.boardId);
@@ -353,6 +355,20 @@ app.post('/api/tasks/:id/move', requireAuth, (req, res) => {
   addHistory(column === 'completed' ? 'completed' : 'moved', req.params.id, `${verb}: "${task.title}"`, task.boardId);
   saveDB();
   broadcastEvent('task_moved', { task });
+
+  if (column === 'completed') {
+    const unblocked = queryAll('SELECT * FROM tasks WHERE blocked_by LIKE ?', [`%${req.params.id}%`]);
+    for (const r of unblocked) {
+      const blockers = JSON.parse(r.blocked_by || '[]');
+      if (!blockers.includes(req.params.id)) continue;
+      const allDone = blockers.every(bid => {
+        const b = queryOne('SELECT column_name FROM tasks WHERE id = ?', [bid]);
+        return b && b.column_name === 'completed';
+      });
+      if (allDone) broadcastEvent('task_unblocked', { taskId: r.id, title: r.title, unblockedBy: task.title });
+    }
+  }
+
   res.json({ success: true, task });
 });
 
@@ -404,7 +420,7 @@ app.get('/api/export', requireAuth, (req, res) => {
 
   if (format === 'csv') {
     const tasks = Object.values(getAllTasks(boardId));
-    const headers = ['ID','Title','Description','Column','Priority','Tags','Due Date','Time Spent (min)','Created','Completed'];
+    const headers = ['ID','Title','Description','Column','Priority','Tags','Due Date','Time Spent (min)','Created','Completed','Blocked By'];
     const rows = tasks.map(t => [
       escapeCsv(t.id), escapeCsv(t.title), escapeCsv(t.description),
       escapeCsv(t.column), escapeCsv(t.priority),
@@ -412,7 +428,8 @@ app.get('/api/export', requireAuth, (req, res) => {
       escapeCsv(t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : ''),
       escapeCsv(Math.round(totalTimeMs(t.timeEntries) / 60000)),
       escapeCsv(t.createdAt ? new Date(t.createdAt).toISOString() : ''),
-      escapeCsv(t.completedAt ? new Date(t.completedAt).toISOString() : '')
+      escapeCsv(t.completedAt ? new Date(t.completedAt).toISOString() : ''),
+      escapeCsv((t.blockedBy || []).join('; '))
     ].join(','));
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="closedboard-export-${Date.now()}.csv"`);
@@ -507,6 +524,7 @@ process.on('SIGTERM', () => { if (db) { saveDB(); db.close(); } process.exit(0);
   if (!columnExists('tasks', 'due_date')) db.run('ALTER TABLE tasks ADD COLUMN due_date INTEGER');
   if (!columnExists('tasks', 'time_entries')) db.run("ALTER TABLE tasks ADD COLUMN time_entries TEXT DEFAULT '[]'");
   if (!columnExists('tasks', 'board_id')) db.run("ALTER TABLE tasks ADD COLUMN board_id TEXT DEFAULT 'default'");
+  if (!columnExists('tasks', 'blocked_by')) db.run("ALTER TABLE tasks ADD COLUMN blocked_by TEXT DEFAULT '[]'");
   if (!columnExists('history', 'board_id')) db.run("ALTER TABLE history ADD COLUMN board_id TEXT DEFAULT 'default'");
 
   // Boards table

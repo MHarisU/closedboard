@@ -16,7 +16,10 @@ import TagManager from './components/TagManager';
 import ToastContainer from './components/ToastContainer';
 import LearningDashboard from './components/LearningDashboard';
 import MorningBriefing, { shouldShowBriefing, dismissBriefing } from './components/MorningBriefing';
-import { COLUMNS } from './utils/constants';
+import FocusMode from './components/FocusMode';
+import QuickCapture from './components/QuickCapture';
+import DependencyGraph from './components/DependencyGraph';
+import { COLUMNS, isTaskBlocked } from './utils/constants';
 
 function SkeletonCard({ isDark }) {
   const bg = isDark ? 'bg-slate-700' : 'bg-slate-200';
@@ -92,6 +95,12 @@ function EmptyBoard({ isDark, onNewTask }) {
 }
 
 function AppContent() {
+  const toast = useToast();
+
+  const handleUnblocked = useCallback(({ title, unblockedBy }) => {
+    toast.success(`Unblocked: ${title} (${unblockedBy} completed)`);
+  }, [toast]);
+
   const {
     tasks, history, loading, connected, lastSync, pendingSync,
     boards, currentBoardId, setCurrentBoardId, customTags, activeTimerTaskId,
@@ -100,10 +109,9 @@ function AppContent() {
     createBoard, updateBoard, deleteBoard,
     createTag, updateTag, deleteTag,
     getTasksByColumn, getArchivedTasks, getCurrentlyWorking, refresh
-  } = useBoard();
+  } = useBoard(handleUnblocked);
 
   const { isDark } = useTheme();
-  const toast = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,6 +121,8 @@ function AppContent() {
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [showBriefing, setShowBriefing] = useState(() => shouldShowBriefing());
+  const [focusMode, setFocusMode] = useState(false);
+  const [depsOpen, setDepsOpen] = useState(false);
   const searchInputRef = useRef(null);
 
   const handleNewTask = useCallback(() => { setEditingTask(null); setIsModalOpen(true); }, []);
@@ -125,6 +135,10 @@ function AppContent() {
 
   const handleMoveTask = async (taskId, column) => {
     const task = tasks[taskId];
+    if (column === 'inProgress' && task && isTaskBlocked(task, tasks)) {
+      toast.error('This task is blocked. Complete its blockers first.');
+      return;
+    }
     await moveTask(taskId, column);
     if (column === 'completed') toast.success(`Completed: ${task?.title || 'Task'}`);
     else if (column === 'inProgress') toast.info(`Started: ${task?.title || 'Task'}`);
@@ -144,7 +158,8 @@ function AppContent() {
             column: task.column, priority: task.priority,
             isAITask: task.isAITask, tags: task.tags,
             subtasks: task.subtasks, resources: task.resources,
-            dueDate: task.dueDate, timeEntries: task.timeEntries
+            dueDate: task.dueDate, timeEntries: task.timeEntries,
+            blockedBy: task.blockedBy
           });
           toast.info('Task restored');
         }
@@ -165,6 +180,29 @@ function AppContent() {
     const result = await stopTimer(taskId);
     if (result.success) toast.info('Timer stopped');
   };
+
+  const enterFocusMode = useCallback(() => {
+    const inProgress = Object.values(tasks)
+      .filter(t => t.column === 'inProgress')
+      .sort((a, b) => {
+        const o = { urgent: 0, high: 1, medium: 2, low: 3 };
+        return (o[a.priority] ?? 2) - (o[b.priority] ?? 2);
+      });
+    if (inProgress.length > 0) setFocusMode(true);
+    else toast.info('No in-progress tasks to focus on');
+  }, [tasks, toast]);
+
+  const focusTask = focusMode ? Object.values(tasks)
+    .filter(t => t.column === 'inProgress')
+    .sort((a, b) => {
+      const o = { urgent: 0, high: 1, medium: 2, low: 3 };
+      return (o[a.priority] ?? 2) - (o[b.priority] ?? 2);
+    })[0] || null : null;
+
+  const handleQuickCapture = useCallback(async (taskData) => {
+    await addTask(taskData);
+    toast.success('Captured!');
+  }, [addTask, toast]);
 
   const handleTagFilter = (tagId) => {
     if (tagFilter === tagId) setTagFilter(null);
@@ -194,7 +232,7 @@ function AppContent() {
     onFocusTask: setFocusedTaskId,
     onEditFocused: () => { const t = focusedTaskId && tasks[focusedTaskId]; if (t) handleEditTask(t); },
     onDeleteFocused: () => { if (focusedTaskId) handleDeleteTask(focusedTaskId); },
-    disabled: showBriefing
+    disabled: showBriefing || focusMode
   });
 
   const currentlyWorking = getCurrentlyWorking();
@@ -212,6 +250,18 @@ function AppContent() {
     );
   }
 
+  if (focusMode && focusTask) {
+    return (
+      <FocusMode
+        task={focusTask}
+        onExit={() => setFocusMode(false)}
+        onStartTimer={handleStartTimer}
+        onStopTimer={handleStopTimer}
+        activeTimerTaskId={activeTimerTaskId}
+      />
+    );
+  }
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
       <Header
@@ -225,6 +275,8 @@ function AppContent() {
         onSwitchBoard={setCurrentBoardId}
         onCreateBoard={createBoard} onUpdateBoard={updateBoard} onDeleteBoard={deleteBoard}
         onOpenTagManager={() => setTagManagerOpen(true)}
+        onFocusMode={enterFocusMode}
+        onOpenDeps={() => setDepsOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
@@ -274,7 +326,7 @@ function AppContent() {
               isArchive={true} focusedTaskId={focusedTaskId}
               customTags={customTags}
               onStartTimer={handleStartTimer} onStopTimer={handleStopTimer}
-              activeTimerTaskId={activeTimerTaskId}
+              activeTimerTaskId={activeTimerTaskId} allTasks={tasks}
             />
           </div>
         ) : (
@@ -288,7 +340,7 @@ function AppContent() {
                 focusedTaskId={focusedTaskId}
                 customTags={customTags}
                 onStartTimer={handleStartTimer} onStopTimer={handleStopTimer}
-                activeTimerTaskId={activeTimerTaskId}
+                activeTimerTaskId={activeTimerTaskId} allTasks={tasks}
               />
             ))}
           </div>
@@ -311,12 +363,15 @@ function AppContent() {
             <Keyboard size={11} /> N: New &middot; j/k: Navigate &middot; Enter: Edit &middot; D: Delete &middot; /: Search &middot; R: Refresh
           </p>
         </footer>
+        <div className="h-16" />
       </main>
 
       <TaskModal isOpen={isModalOpen} onClose={closeModal} onSave={handleSaveTask}
-        editTask={editingTask} customTags={customTags} />
+        editTask={editingTask} customTags={customTags} allTasks={tasks} />
       <TagManager isOpen={tagManagerOpen} onClose={() => setTagManagerOpen(false)}
         tags={customTags} onCreate={createTag} onUpdate={updateTag} onDelete={deleteTag} />
+      <DependencyGraph isOpen={depsOpen} onClose={() => setDepsOpen(false)} tasks={tasks} />
+      <QuickCapture onCapture={handleQuickCapture} />
       <ToastContainer />
     </div>
   );

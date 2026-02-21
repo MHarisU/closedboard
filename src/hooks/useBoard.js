@@ -11,8 +11,10 @@ import { DEFAULT_TAGS } from '../utils/constants';
 
 const BOARD_KEY = 'closedboard_current_board';
 
-export const useBoard = () => {
+export const useBoard = (onTaskUnblocked) => {
   const [data, setData] = useState({ tasks: {}, history: [], meta: {} });
+  const unblockedCbRef = useRef(onTaskUnblocked);
+  useEffect(() => { unblockedCbRef.current = onTaskUnblocked; }, [onTaskUnblocked]);
   const [boards, setBoards] = useState([]);
   const [customTags, setCustomTags] = useState(DEFAULT_TAGS);
   const [currentBoardId, setCurrentBoardIdRaw] = useState(
@@ -129,6 +131,11 @@ export const useBoard = () => {
     source.addEventListener('tag_updated', (e) => { const { tag } = JSON.parse(e.data); setCustomTags(prev => ({ ...prev, [tag.id]: tag })); });
     source.addEventListener('tag_deleted', (e) => { const { tagId } = JSON.parse(e.data); setCustomTags(prev => { const n = { ...prev }; delete n[tagId]; return n; }); });
 
+    source.addEventListener('task_unblocked', (e) => {
+      const { title, unblockedBy } = JSON.parse(e.data);
+      unblockedCbRef.current?.({ title, unblockedBy });
+    });
+
     source.onerror = () => setConnected(false);
     return () => source.close();
   }, []);
@@ -142,7 +149,8 @@ export const useBoard = () => {
     const optTask = {
       id: optId, ...task, createdAt: Date.now(), boardId: boardIdRef.current,
       isAITask: task.isAITask || false, tags: task.tags || [], subtasks: task.subtasks || [],
-      timeEntries: task.timeEntries || [], dueDate: task.dueDate || null
+      timeEntries: task.timeEntries || [], dueDate: task.dueDate || null,
+      blockedBy: task.blockedBy || []
     };
     setData(prev => ({
       ...prev, tasks: { ...prev.tasks, [optId]: optTask },

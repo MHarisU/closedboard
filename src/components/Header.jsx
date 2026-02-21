@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Shield, Search, X, BarChart3, Archive, Sun, Moon, RefreshCw, Plus, Download, Tag } from 'lucide-react';
+import { Shield, Search, X, BarChart3, Archive, Sun, Moon, RefreshCw, Plus, Download, Tag, Crosshair, GitBranch } from 'lucide-react';
 import { downloadExport } from '../utils/api';
 import BoardSelector from './BoardSelector';
 
@@ -9,7 +9,7 @@ export default function Header({
   searchQuery, onSearchChange, showArchive, onToggleArchive,
   showStats, onToggleStats, searchInputRef,
   boards, currentBoardId, onSwitchBoard, onCreateBoard, onUpdateBoard, onDeleteBoard,
-  onOpenTagManager
+  onOpenTagManager, onFocusMode, onOpenDeps
 }) {
   const { isDark, toggleTheme } = useTheme();
   const [syncText, setSyncText] = useState('');
@@ -98,6 +98,20 @@ export default function Header({
                   : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
               title={showArchive ? 'Hide Archive' : 'Show Archive'}>
               <Archive size={18} />
+            </button>
+
+            <button onClick={onFocusMode}
+              className={`p-2.5 rounded-xl transition-all duration-200
+                ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title="Focus Mode">
+              <Crosshair size={18} />
+            </button>
+
+            <button onClick={onOpenDeps}
+              className={`p-2.5 rounded-xl transition-all duration-200
+                ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title="Dependencies">
+              <GitBranch size={18} />
             </button>
 
             <button onClick={onOpenTagManager}

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Pencil, GraduationCap, Plus, BookOpen, Square, X, BookMarked, ExternalLink, Bot, CalendarClock } from 'lucide-react';
+import { Pencil, GraduationCap, Plus, BookOpen, Square, X, BookMarked, ExternalLink, Bot, CalendarClock, GitBranch, Check } from 'lucide-react';
 import { PRIORITIES, COLUMNS, DEFAULT_TAGS } from '../utils/constants';
 
-export default function TaskModal({ isOpen, onClose, onSave, editTask, customTags }) {
+export default function TaskModal({ isOpen, onClose, onSave, editTask, customTags, allTasks }) {
   const { isDark } = useTheme();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -17,6 +17,7 @@ export default function TaskModal({ isOpen, onClose, onSave, editTask, customTag
   const [newResourceTitle, setNewResourceTitle] = useState('');
   const [newResourceUrl, setNewResourceUrl] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [blockedBy, setBlockedBy] = useState([]);
 
   const TAGS = (customTags && Object.keys(customTags).length > 0) ? customTags : DEFAULT_TAGS;
   const learningTopics = Object.entries(TAGS).filter(([_, t]) => t.isLearningTopic).map(([id]) => id);
@@ -33,10 +34,11 @@ export default function TaskModal({ isOpen, onClose, onSave, editTask, customTag
       setSubtasks(editTask.subtasks || []);
       setResources(editTask.resources || []);
       setDueDate(editTask.dueDate ? new Date(editTask.dueDate).toISOString().split('T')[0] : '');
+      setBlockedBy(editTask.blockedBy || []);
     } else {
       setTitle(''); setDescription(''); setPriority('medium'); setColumn('backlog');
       setIsAITask(false); setTags([]); setSubtasks([]); setResources([]);
-      setDueDate('');
+      setDueDate(''); setBlockedBy([]);
     }
     setNewSubtask(''); setNewResourceTitle(''); setNewResourceUrl('');
   }, [editTask, isOpen]);
@@ -49,7 +51,8 @@ export default function TaskModal({ isOpen, onClose, onSave, editTask, customTag
       title: title.trim(), description: description.trim(),
       priority, column, isAITask, tags, subtasks,
       resources: isLearningTask ? resources : [],
-      dueDate: dueDate ? new Date(dueDate + 'T23:59:59').getTime() : null
+      dueDate: dueDate ? new Date(dueDate + 'T23:59:59').getTime() : null,
+      blockedBy
     });
     onClose();
   };
@@ -116,6 +119,40 @@ export default function TaskModal({ isOpen, onClose, onSave, editTask, customTag
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
               className={inputClass} />
           </div>
+
+          {/* Blocked By */}
+          {(() => {
+            const available = Object.values(allTasks || {}).filter(t =>
+              t.column !== 'completed' && t.id !== editTask?.id
+            );
+            if (available.length === 0) return null;
+            return (
+              <div>
+                <label className={`${labelClass} flex items-center gap-1.5`}>
+                  <GitBranch size={13} /> Blocked By
+                </label>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {available.map(t => {
+                    const selected = blockedBy.includes(t.id);
+                    return (
+                      <button key={t.id} type="button"
+                        onClick={() => setBlockedBy(prev => selected ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+                        className={`w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors
+                          ${selected
+                            ? isDark ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : isDark ? 'hover:bg-slate-800 text-slate-400 border border-transparent' : 'hover:bg-slate-50 text-slate-600 border border-transparent'}`}>
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0
+                          ${selected ? 'bg-blue-500 border-blue-500 text-white' : isDark ? 'border-slate-600' : 'border-slate-300'}`}>
+                          {selected && <Check size={10} />}
+                        </span>
+                        <span className="truncate">{t.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Tags */}
           <div>

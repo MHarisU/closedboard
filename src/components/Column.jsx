@@ -9,7 +9,7 @@ const columnIcons = { backlog: ClipboardList, inProgress: Zap, completed: CheckC
 export default function Column({
   columnId, tasks, onMoveTask, onEditTask, onDeleteTask, onUpdateSubtask,
   onTagFilter, activeTagFilter, isArchive = false, focusedTaskId,
-  customTags, onStartTimer, onStopTimer, activeTimerTaskId
+  customTags, onStartTimer, onStopTimer, activeTimerTaskId, allTasks
 }) {
   const { isDark } = useTheme();
   const [isDragOver, setIsDragOver] = useState(false);
@@ -77,7 +77,7 @@ export default function Column({
               isFocused={focusedTaskId === task.id}
               customTags={customTags}
               onStartTimer={onStartTimer} onStopTimer={onStopTimer}
-              activeTimerTaskId={activeTimerTaskId}
+              activeTimerTaskId={activeTimerTaskId} allTasks={allTasks}
             />
           ))
         )}
