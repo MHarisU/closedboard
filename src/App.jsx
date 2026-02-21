@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
 import { useBoard } from './hooks/useBoard';
@@ -125,6 +125,12 @@ function AppContent() {
   const [depsOpen, setDepsOpen] = useState(false);
   const searchInputRef = useRef(null);
 
+  useEffect(() => {
+    if (focusMode && !Object.values(tasks).some(t => t.column === 'inProgress')) {
+      setFocusMode(false);
+    }
+  }, [focusMode, tasks]);
+
   const handleNewTask = useCallback(() => { setEditingTask(null); setIsModalOpen(true); }, []);
   const handleEditTask = useCallback((task) => { setEditingTask(task); setIsModalOpen(true); }, []);
 
@@ -172,13 +178,17 @@ function AppContent() {
       await stopTimer(activeTimerTaskId);
     }
     const result = await startTimer(taskId);
-    if (result.success) toast.info('Timer started');
-    else if (result.error) toast.error(result.error);
+    if (!focusMode) {
+      if (result.success) toast.info('Timer started');
+      else if (result.error) toast.error(result.error);
+    }
+    return result;
   };
 
   const handleStopTimer = async (taskId) => {
     const result = await stopTimer(taskId);
-    if (result.success) toast.info('Timer stopped');
+    if (!focusMode && result.success) toast.info('Timer stopped');
+    return result;
   };
 
   const enterFocusMode = useCallback(() => {

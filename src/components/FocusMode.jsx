@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   X, Play, Pause, RotateCcw, Coffee, Flame,
-  Circle, CircleDot, AlertCircle, Clock, CheckCircle2
+  Circle, CircleDot, AlertCircle, Clock
 } from 'lucide-react';
 import { PRIORITIES, formatDuration, totalTimeMs } from '../utils/constants';
 

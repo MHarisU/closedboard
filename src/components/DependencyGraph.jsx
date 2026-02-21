@@ -13,32 +13,21 @@ export default function DependencyGraph({ isOpen, onClose, tasks }) {
 
   const chains = useMemo(() => {
     const allTasks = tasks || {};
-    const withDeps = Object.values(allTasks).filter(t =>
-      (t.blockedBy && t.blockedBy.length > 0) ||
-      Object.values(allTasks).some(other => other.blockedBy?.includes(t.id))
-    );
-
-    const roots = new Set();
     const children = {};
+    const hasParent = new Set();
 
-    for (const t of withDeps) {
+    for (const t of Object.values(allTasks)) {
       const blockers = (t.blockedBy || []).filter(bid => allTasks[bid]);
-      if (blockers.length === 0) {
-        roots.add(t.id);
-      } else {
-        for (const bid of blockers) {
-          if (!children[bid]) children[bid] = new Set();
-          children[bid].add(t.id);
-          roots.add(bid);
-        }
+      for (const bid of blockers) {
+        if (!children[bid]) children[bid] = new Set();
+        children[bid].add(t.id);
+        hasParent.add(t.id);
       }
     }
 
-    for (const id of roots) {
-      for (const [, kids] of Object.entries(children)) {
-        if (kids.has(id)) { roots.delete(id); break; }
-      }
-    }
+    const roots = Object.keys(allTasks).filter(id =>
+      !hasParent.has(id) && (children[id] || (allTasks[id].blockedBy || []).some(bid => allTasks[bid]))
+    );
 
     const buildTree = (id, visited = new Set()) => {
       if (visited.has(id)) return null;
@@ -49,22 +38,7 @@ export default function DependencyGraph({ isOpen, onClose, tasks }) {
       return { task, children: kids };
     };
 
-    const realRoots = new Set();
-    for (const id of Object.keys(allTasks)) {
-      const hasParent = Object.values(children).some(kids => kids.has(id));
-      if (!hasParent && children[id]) realRoots.add(id);
-    }
-    for (const t of withDeps) {
-      if ((t.blockedBy || []).length > 0) {
-        for (const bid of t.blockedBy) {
-          if (allTasks[bid] && !Object.values(children).some(kids => kids.has(bid))) {
-            realRoots.add(bid);
-          }
-        }
-      }
-    }
-
-    return [...realRoots].map(id => buildTree(id)).filter(Boolean);
+    return roots.map(id => buildTree(id)).filter(Boolean);
   }, [tasks]);
 
   if (!isOpen) return null;
