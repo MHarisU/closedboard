@@ -1,13 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
-const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'closedboard.db');
+const DATA_FILE = path.join(__dirname, 'data.json');
 
 const API_SECRET = process.env.API_SECRET;
 if (!API_SECRET) {
@@ -15,98 +15,52 @@ if (!API_SECRET) {
 }
 const EFFECTIVE_SECRET = API_SECRET || '53372';
 
-// --- Database ---
-
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS history (
-    id TEXT PRIMARY KEY,
-    data TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS meta (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  );
-`);
-
-const stmt = {
-  getAllTasks: db.prepare('SELECT data FROM tasks'),
-  getTask: db.prepare('SELECT data FROM tasks WHERE id = ?'),
-  upsertTask: db.prepare('INSERT OR REPLACE INTO tasks (id, data) VALUES (?, ?)'),
-  deleteTask: db.prepare('DELETE FROM tasks WHERE id = ?'),
-  getHistory: db.prepare('SELECT data FROM history ORDER BY created_at DESC LIMIT 50'),
-  insertHistory: db.prepare('INSERT INTO history (id, data, created_at) VALUES (?, ?, ?)'),
-  trimHistory: db.prepare(`DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY created_at DESC LIMIT 50)`),
-  upsertMeta: db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)'),
-  getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
-};
-
-// Migrate from legacy data.json if it exists
-(function migrateFromJSON() {
-  const jsonPath = path.join(__dirname, 'data.json');
-  if (!fs.existsSync(jsonPath)) return;
-  try {
-    const raw = fs.readFileSync(jsonPath, 'utf-8');
-    const legacy = JSON.parse(raw);
-    if (!legacy?.tasks || Object.keys(legacy.tasks).length === 0) return;
-
-    const taskCount = stmt.getAllTasks.all().length;
-    if (taskCount > 0) return;
-
-    const migrate = db.transaction(() => {
-      for (const [id, task] of Object.entries(legacy.tasks)) {
-        stmt.upsertTask.run(id, JSON.stringify(task));
-      }
-      if (legacy.history) {
-        for (const entry of legacy.history) {
-          stmt.insertHistory.run(entry.id, JSON.stringify(entry), entry.timestamp || Date.now());
-        }
-      }
-    });
-    migrate();
-    fs.renameSync(jsonPath, jsonPath + '.migrated');
-    console.log(`Migrated ${Object.keys(legacy.tasks).length} tasks from data.json`);
-  } catch (e) {
-    console.error('JSON migration failed:', e.message);
-  }
-})();
-
-// --- Helpers ---
+// --- Storage (atomic JSON writes) ---
 
 function generateId() {
   return `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 }
 
-function getAllTasks() {
-  const tasks = {};
-  for (const row of stmt.getAllTasks.all()) {
-    const task = JSON.parse(row.data);
-    tasks[task.id] = task;
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.tasks) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load data file:', e.message);
   }
-  return tasks;
+  return { tasks: {}, history: [], meta: { lastUpdated: Date.now() } };
 }
 
-function getBoardData() {
-  return {
-    tasks: getAllTasks(),
-    history: stmt.getHistory.all().map(r => JSON.parse(r.data)),
-    meta: { lastUpdated: Number(stmt.getMeta.get('lastUpdated')?.value || Date.now()) }
-  };
+function saveData() {
+  try {
+    const tmp = path.join(os.tmpdir(), `closedboard_${process.pid}_${Date.now()}.json`);
+    fs.writeFileSync(tmp, JSON.stringify(boardData, null, 2));
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (e) {
+    console.error('Failed to persist data:', e.message);
+    try {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(boardData, null, 2));
+    } catch (e2) {
+      console.error('Fallback write also failed:', e2.message);
+    }
+  }
 }
+
+let boardData = loadData();
 
 function addHistory(action, taskId, message) {
-  const id = generateId();
-  const entry = { id, action, taskId, timestamp: Date.now(), message };
-  stmt.insertHistory.run(id, JSON.stringify(entry), Date.now());
-  stmt.trimHistory.run();
-  stmt.upsertMeta.run('lastUpdated', String(Date.now()));
+  boardData.history.unshift({
+    id: generateId(),
+    action,
+    taskId,
+    timestamp: Date.now(),
+    message
+  });
+  boardData.history = boardData.history.slice(0, 50);
+  boardData.meta.lastUpdated = Date.now();
 }
 
 // --- Middleware ---
@@ -153,7 +107,7 @@ app.post('/api/auth', (req, res) => {
 // --- Protected Routes ---
 
 app.get('/api/tasks', requireAuth, (_req, res) => {
-  res.json(getBoardData());
+  res.json(boardData);
 });
 
 app.post('/api/tasks', requireAuth, (req, res) => {
@@ -173,41 +127,42 @@ app.post('/api/tasks', requireAuth, (req, res) => {
     completedAt: null
   };
 
-  stmt.upsertTask.run(id, JSON.stringify(task));
+  boardData.tasks[id] = task;
   addHistory('created', id, `Created: "${task.title}"`);
+  saveData();
   res.json({ success: true, task });
 });
 
 app.put('/api/tasks/:id', requireAuth, (req, res) => {
-  const row = stmt.getTask.get(req.params.id);
-  if (!row) {
+  const task = boardData.tasks[req.params.id];
+  if (!task) {
     return res.status(404).json({ success: false, error: 'Task not found' });
   }
 
-  const existing = JSON.parse(row.data);
   const { id: _ignoreId, ...updates } = req.body;
-  const updated = { ...existing, ...updates };
+  Object.assign(task, updates);
 
-  stmt.upsertTask.run(req.params.id, JSON.stringify(updated));
-  addHistory('updated', req.params.id, `Updated: "${updated.title}"`);
-  res.json({ success: true, task: updated });
+  addHistory('updated', req.params.id, `Updated: "${task.title}"`);
+  saveData();
+  res.json({ success: true, task });
 });
 
 app.delete('/api/tasks/:id', requireAuth, (req, res) => {
-  const row = stmt.getTask.get(req.params.id);
-  if (!row) {
+  const task = boardData.tasks[req.params.id];
+  if (!task) {
     return res.status(404).json({ success: false, error: 'Task not found' });
   }
 
-  const task = JSON.parse(row.data);
-  stmt.deleteTask.run(req.params.id);
-  addHistory('deleted', req.params.id, `Deleted: "${task.title}"`);
+  const title = task.title;
+  delete boardData.tasks[req.params.id];
+  addHistory('deleted', req.params.id, `Deleted: "${title}"`);
+  saveData();
   res.json({ success: true });
 });
 
 app.post('/api/tasks/:id/move', requireAuth, (req, res) => {
-  const row = stmt.getTask.get(req.params.id);
-  if (!row) {
+  const task = boardData.tasks[req.params.id];
+  if (!task) {
     return res.status(404).json({ success: false, error: 'Task not found' });
   }
 
@@ -216,30 +171,20 @@ app.post('/api/tasks/:id/move', requireAuth, (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid column' });
   }
 
-  const task = JSON.parse(row.data);
   task.column = column;
   task.completedAt = column === 'completed' ? Date.now() : null;
 
-  stmt.upsertTask.run(req.params.id, JSON.stringify(task));
   const action = column === 'completed' ? 'completed' : 'moved';
   const verb = column === 'completed' ? 'Completed' : 'Moved';
   addHistory(action, req.params.id, `${verb}: "${task.title}"`);
+  saveData();
   res.json({ success: true, task });
-});
-
-// --- Graceful shutdown ---
-
-process.on('SIGTERM', () => {
-  db.close();
-  process.exit(0);
 });
 
 // --- Start ---
 
 app.listen(PORT, '0.0.0.0', () => {
-  const taskCount = stmt.getAllTasks.all().length;
   console.log(`ClosedBoard API running on port ${PORT}`);
-  console.log(`Storage: SQLite (${DB_PATH})`);
-  console.log(`Tasks loaded: ${taskCount}`);
+  console.log(`Tasks loaded: ${Object.keys(boardData.tasks).length}`);
   console.log(`Auth: ${API_SECRET ? 'API_SECRET set' : 'using default (set API_SECRET!)'}`);
 });
