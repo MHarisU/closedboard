@@ -60,7 +60,7 @@ export default function Column({ columnId, tasks, onMoveTask, onEditTask, onDele
         </div>
       </div>
 
-      <div className="flex-1 p-3 overflow-y-auto column-scroll max-h-[calc(100vh-380px)] min-h-[200px]">
+      <div className="flex-1 p-3 min-h-[200px]">
         {tasks.length === 0 ? (
           <div className={`text-center py-12 px-4 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
             <div className="text-3xl mb-3 opacity-50">
