@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  ClipboardList, Zap, CheckCircle, Check, Trash2, Pencil, Bot,
+  Circle, CircleDot, AlertCircle, Flame, ChevronDown
+} from 'lucide-react';
 import { PRIORITIES, TAGS, COLUMNS, formatTime } from '../utils/constants';
+
+const columnIcons = { backlog: ClipboardList, inProgress: Zap, completed: CheckCircle };
+const priorityIcons = { low: Circle, medium: CircleDot, high: AlertCircle, urgent: Flame };
 
 export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubtask, onTagFilter, activeTagFilter, isFocused }) {
   const { isDark } = useTheme();
@@ -11,6 +18,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
   const cardRef = useRef(null);
 
   const priority = PRIORITIES[task.priority];
+  const PriorityIcon = priorityIcons[task.priority] || Circle;
 
   useEffect(() => {
     if (isFocused && cardRef.current) {
@@ -76,17 +84,18 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
   };
 
   const moveTargets = Object.entries(COLUMNS).filter(([id]) => id !== task.column);
-  const moveIcons = { backlog: '📋', inProgress: '🚀', completed: '✅' };
 
   return (
     <div className="relative mb-3 overflow-hidden rounded-xl">
       {/* Swipe background */}
       <div className={`absolute inset-0 flex items-center justify-between px-4 transition-colors ${getSwipeBackground()}`}>
-        <span className={`text-emerald-500 font-medium text-sm ${swipeX > 30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
-          ✓ Complete
+        <span className={`text-emerald-500 font-medium text-sm flex items-center gap-1.5
+          ${swipeX > 30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
+          <Check size={14} /> Complete
         </span>
-        <span className={`text-red-500 font-medium text-sm ${swipeX < -30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
-          Delete 🗑️
+        <span className={`text-red-500 font-medium text-sm flex items-center gap-1.5
+          ${swipeX < -30 ? 'opacity-100' : 'opacity-0'} transition-opacity`}>
+          Delete <Trash2 size={14} />
         </span>
       </div>
 
@@ -131,15 +140,16 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
 
         {/* Header */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h4 className={`font-medium text-sm leading-snug flex-1 min-w-0
+          <h4 className={`font-medium text-sm leading-snug flex-1 min-w-0 flex items-center gap-1.5
             ${isDark ? 'text-white' : 'text-slate-900'}`}>
-            {task.isAITask && <span className="mr-1.5">🤖</span>}
-            {task.column === 'completed' && <span className="mr-1.5 text-emerald-500">✓</span>}
-            {task.title}
+            {task.isAITask && <Bot size={14} className="text-blue-500 shrink-0" />}
+            {task.column === 'completed' && <Check size={14} className="text-emerald-500 shrink-0" />}
+            <span className="truncate">{task.title}</span>
           </h4>
-          <span className={`text-[10px] px-2 py-1 rounded-full border font-medium whitespace-nowrap
+          <span className={`text-[10px] px-2 py-1 rounded-full border font-medium whitespace-nowrap inline-flex items-center gap-1
             ${priorityStyles[task.priority]}`}>
-            {priority.icon} {priority.label}
+            <PriorityIcon size={10} />
+            {priority.label}
           </span>
         </div>
 
@@ -159,7 +169,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
               className={`text-xs flex items-center gap-1.5 mb-2 transition-colors
                 ${isDark ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              <span className="text-[10px]">{expandedSubtasks ? '▼' : '▶'}</span>
+              <ChevronDown size={12} className={`transition-transform ${expandedSubtasks ? '' : '-rotate-90'}`} />
               <span>Subtasks</span>
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium
                 ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
@@ -205,20 +215,24 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
         )}
 
         {/* Quick move buttons */}
-        <div className={`flex gap-1 mb-2`}>
-          {moveTargets.map(([colId]) => (
-            <button
-              key={colId}
-              onClick={(e) => { e.stopPropagation(); onMove(task.id, colId); }}
-              className={`text-[10px] px-2 py-1 rounded-lg transition-colors font-medium
-                ${isDark
-                  ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
-              title={`Move to ${COLUMNS[colId].title}`}
-            >
-              {moveIcons[colId]} {COLUMNS[colId].title.split(' ').slice(1).join(' ')}
-            </button>
-          ))}
+        <div className="flex gap-1 mb-2">
+          {moveTargets.map(([colId]) => {
+            const ColIcon = columnIcons[colId];
+            return (
+              <button
+                key={colId}
+                onClick={(e) => { e.stopPropagation(); onMove(task.id, colId); }}
+                className={`text-[10px] px-2 py-1 rounded-lg transition-colors font-medium inline-flex items-center gap-1
+                  ${isDark
+                    ? 'bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700'}`}
+                title={`Move to ${COLUMNS[colId].label}`}
+              >
+                <ColIcon size={11} />
+                {COLUMNS[colId].label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Footer */}
@@ -234,7 +248,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
                 ${isDark ? 'hover:bg-slate-700 hover:text-slate-300' : 'hover:bg-slate-100 hover:text-slate-600'}`}
               title="Edit (Enter)"
             >
-              ✏️
+              <Pencil size={13} />
             </button>
             <button
               onClick={() => onDelete(task.id)}
@@ -242,7 +256,7 @@ export default function TaskCard({ task, onMove, onEdit, onDelete, onUpdateSubta
                 ${isDark ? 'hover:bg-red-500/20 hover:text-red-400' : 'hover:bg-red-50 hover:text-red-500'}`}
               title="Delete (D)"
             >
-              🗑️
+              <Trash2 size={13} />
             </button>
           </div>
         </div>

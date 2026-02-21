@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Shield } from 'lucide-react';
 import { authenticatePin } from '../utils/api';
 
 const AUTH_KEY = 'closedboard_auth';
@@ -58,15 +59,15 @@ export default function PinGate({ children }) {
     );
   }
 
-  if (isAuthenticated) {
-    return children;
-  }
+  if (isAuthenticated) return children;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 w-full max-w-sm shadow-2xl">
         <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🔐</div>
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center mb-4">
+            <Shield size={32} className="text-blue-400" />
+          </div>
           <h1 className="text-2xl font-bold text-white mb-2">ClosedBoard</h1>
           <p className="text-slate-400 text-sm">Enter PIN to access</p>
         </div>
@@ -79,10 +80,7 @@ export default function PinGate({ children }) {
               pattern="[0-9]*"
               maxLength={5}
               value={pin}
-              onChange={(e) => {
-                setPin(e.target.value.replace(/\D/g, ''));
-                setError('');
-              }}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
               placeholder="•••••"
               className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white text-center text-2xl tracking-widest placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               autoFocus
@@ -90,9 +88,7 @@ export default function PinGate({ children }) {
             />
           </div>
 
-          {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
-          )}
+          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
           <button
             type="submit"

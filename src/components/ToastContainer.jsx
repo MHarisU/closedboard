@@ -1,5 +1,6 @@
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { CheckCircle, XCircle, Info, X } from 'lucide-react';
 
 export default function ToastContainer() {
   const { isDark } = useTheme();
@@ -7,7 +8,11 @@ export default function ToastContainer() {
 
   if (toasts.length === 0) return null;
 
-  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const icons = {
+    success: <CheckCircle size={18} />,
+    error: <XCircle size={18} />,
+    info: <Info size={18} />
+  };
 
   const colors = {
     success: isDark
@@ -29,7 +34,7 @@ export default function ToastContainer() {
           className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg backdrop-blur-sm
             animate-slide-in-right ${colors[toast.type]}`}
         >
-          <span className="text-lg">{icons[toast.type]}</span>
+          <span className="shrink-0">{icons[toast.type]}</span>
           <span className="text-sm font-medium flex-1">{toast.message}</span>
           {toast.action && (
             <button
@@ -47,10 +52,10 @@ export default function ToastContainer() {
             </button>
           )}
           <button
-            className="opacity-50 hover:opacity-100 transition-opacity text-sm"
+            className="opacity-50 hover:opacity-100 transition-opacity shrink-0"
             onClick={(e) => { e.stopPropagation(); removeToast(toast.id); }}
           >
-            ✕
+            <X size={14} />
           </button>
         </div>
       ))}

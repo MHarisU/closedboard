@@ -3,6 +3,9 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { ToastProvider, useToast } from './contexts/ToastContext';
 import { useBoard } from './hooks/useBoard';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import {
+  Shield, AlertTriangle, Search, Tag, Heart, Rocket, Keyboard
+} from 'lucide-react';
 import Header from './components/Header';
 import Column from './components/Column';
 import CurrentlyWorking from './components/CurrentlyWorking';
@@ -66,7 +69,10 @@ function EmptyBoard({ isDark, onNewTask }) {
     <div className="mb-6">
       <div className={`text-center py-16 px-6 rounded-2xl border-2 border-dashed
         ${isDark ? 'border-slate-700 bg-slate-900/30' : 'border-slate-300 bg-white/50'}`}>
-        <div className="text-6xl mb-5 animate-bounce" style={{ animationDuration: '2s' }}>🚀</div>
+        <div className="mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-5"
+          style={{ animation: 'bounce 2s ease-in-out infinite' }}>
+          <Rocket size={40} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
+        </div>
         <h2 className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-800'}`}>
           Your board is empty
         </h2>
@@ -79,8 +85,7 @@ function EmptyBoard({ isDark, onNewTask }) {
           <kbd className={`mx-1 px-1.5 py-0.5 rounded text-xs font-mono font-bold
             ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>N</kbd>
         </p>
-        <button
-          onClick={onNewTask}
+        <button onClick={onNewTask}
           className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors text-sm"
         >
           Create First Task
@@ -108,15 +113,9 @@ function AppContent() {
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const searchInputRef = useRef(null);
 
-  const handleNewTask = useCallback(() => {
-    setEditingTask(null);
-    setIsModalOpen(true);
-  }, []);
+  const handleNewTask = useCallback(() => { setEditingTask(null); setIsModalOpen(true); }, []);
 
-  const handleEditTask = useCallback((task) => {
-    setEditingTask(task);
-    setIsModalOpen(true);
-  }, []);
+  const handleEditTask = useCallback((task) => { setEditingTask(task); setIsModalOpen(true); }, []);
 
   const handleSaveTask = async (taskData) => {
     if (taskData.id) {
@@ -131,19 +130,14 @@ function AppContent() {
   const handleMoveTask = async (taskId, column) => {
     const task = tasks[taskId];
     await moveTask(taskId, column);
-    if (column === 'completed') {
-      toast.success(`Completed: ${task?.title || 'Task'}`);
-    } else if (column === 'inProgress') {
-      toast.info(`Started: ${task?.title || 'Task'}`);
-    }
+    if (column === 'completed') toast.success(`Completed: ${task?.title || 'Task'}`);
+    else if (column === 'inProgress') toast.info(`Started: ${task?.title || 'Task'}`);
   };
 
   const handleDeleteTask = useCallback(async (taskId) => {
     const task = tasks[taskId];
     if (!task) return;
-
     await deleteTask(taskId);
-
     toast.success(`Deleted: ${task.title}`, {
       duration: 5000,
       action: {
@@ -162,7 +156,7 @@ function AppContent() {
   }, [tasks, deleteTask, addTask, toast]);
 
   const handleTagFilter = (tagId) => {
-    if (tagFilter === tagId) { setTagFilter(null); }
+    if (tagFilter === tagId) setTagFilter(null);
     else { setTagFilter(tagId); toast.info(`Filtering by: ${TAGS[tagId]?.label || tagId}`); }
   };
   const clearTagFilter = () => setTagFilter(null);
@@ -183,21 +177,15 @@ function AppContent() {
         filterTasksByTag(getTasksByColumn(colId, searchQuery)).map(t => t.id));
 
   useKeyboardShortcuts({
-    onNewTask: handleNewTask,
-    onRefresh: refresh,
-    onSearch: focusSearch,
-    onCloseModal: closeModal,
-    isModalOpen,
-    focusedTaskId,
-    allVisibleTaskIds,
+    onNewTask: handleNewTask, onRefresh: refresh,
+    onSearch: focusSearch, onCloseModal: closeModal, isModalOpen,
+    focusedTaskId, allVisibleTaskIds,
     onFocusTask: setFocusedTaskId,
     onEditFocused: () => {
       const t = focusedTaskId && tasks[focusedTaskId];
       if (t) handleEditTask(t);
     },
-    onDeleteFocused: () => {
-      if (focusedTaskId) handleDeleteTask(focusedTaskId);
-    }
+    onDeleteFocused: () => { if (focusedTaskId) handleDeleteTask(focusedTaskId); }
   });
 
   const currentlyWorking = getCurrentlyWorking();
@@ -205,19 +193,13 @@ function AppContent() {
   if (loading) return <SkeletonBoard isDark={isDark} />;
 
   return (
-    <div className={`min-h-screen transition-colors duration-300
-      ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+    <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
       <Header
-        onNewTask={handleNewTask}
-        onRefresh={refresh}
-        connected={connected}
-        lastSync={lastSync}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        showArchive={showArchive}
-        onToggleArchive={() => setShowArchive(!showArchive)}
-        showStats={showStats}
-        onToggleStats={() => setShowStats(!showStats)}
+        onNewTask={handleNewTask} onRefresh={refresh}
+        connected={connected} lastSync={lastSync}
+        searchQuery={searchQuery} onSearchChange={setSearchQuery}
+        showArchive={showArchive} onToggleArchive={() => setShowArchive(!showArchive)}
+        showStats={showStats} onToggleStats={() => setShowStats(!showStats)}
         searchInputRef={searchInputRef}
       />
 
@@ -227,7 +209,8 @@ function AppContent() {
             ${isDark
               ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
               : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
-            <span>⚠️</span><span>Demo mode - API not connected</span>
+            <AlertTriangle size={15} />
+            <span>Demo mode - API not connected</span>
           </div>
         )}
 
@@ -236,7 +219,7 @@ function AppContent() {
             ${isDark
               ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
               : 'bg-blue-50 border border-blue-200 text-blue-700'}`}>
-            <span>🔍 Searching for "{searchQuery}"</span>
+            <span className="flex items-center gap-2"><Search size={14} /> Searching for &ldquo;{searchQuery}&rdquo;</span>
             <button onClick={() => setSearchQuery('')} className="hover:underline font-medium">Clear</button>
           </div>
         )}
@@ -247,7 +230,7 @@ function AppContent() {
               ? 'bg-violet-500/10 border border-violet-500/20 text-violet-400'
               : 'bg-violet-50 border border-violet-200 text-violet-700'}`}>
             <span className="flex items-center gap-2">
-              🏷️ Filtering by tag:
+              <Tag size={14} /> Filtering by tag:
               <span className={`px-2 py-0.5 rounded-full text-white text-xs ${TAGS[tagFilter]?.color}`}>
                 {TAGS[tagFilter]?.label}
               </span>
@@ -260,7 +243,6 @@ function AppContent() {
         <LearningDashboard tasks={tasks} onTagFilter={handleTagFilter} />
         <CurrentlyWorking tasks={currentlyWorking} />
 
-        {/* Empty state coaching */}
         {totalTasks === 0 && !searchQuery && !tagFilter && !showArchive && (
           <EmptyBoard isDark={isDark} onNewTask={handleNewTask} />
         )}
@@ -295,16 +277,18 @@ function AppContent() {
         <footer className={`text-center py-8 text-sm transition-colors duration-300
           ${isDark ? 'text-slate-600' : 'text-slate-400'}`}>
           <p className="flex items-center justify-center gap-2">
-            Built with <span className="text-red-500">♥</span> by ClosedBot 🔐 for Rohail
+            Built with <Heart size={14} className="text-red-500" /> by ClosedBot
+            <Shield size={14} /> for Rohail
           </p>
           <p className="text-xs mt-2 flex items-center justify-center gap-2">
             <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             {connected ? 'Live (SSE)' : 'Offline mode'}
-            {pendingSync > 0 && <span className="text-amber-400">• {pendingSync} queued</span>}
-            {showArchive && <span>• Archive</span>}
+            {pendingSync > 0 && <span className="text-amber-400">&middot; {pendingSync} queued</span>}
+            {showArchive && <span>&middot; Archive</span>}
           </p>
-          <p className={`text-[10px] mt-3 ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>
-            ⌨️ N: New • j/k: Navigate • Enter: Edit • D: Delete • /: Search • R: Refresh
+          <p className={`text-[10px] mt-3 flex items-center justify-center gap-1
+            ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>
+            <Keyboard size={11} /> N: New &middot; j/k: Navigate &middot; Enter: Edit &middot; D: Delete &middot; /: Search &middot; R: Refresh
           </p>
         </footer>
       </main>
