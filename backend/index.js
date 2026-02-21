@@ -164,7 +164,7 @@ function broadcastEvent(eventType, data) {
 app.use(cors({ origin: CORS_ORIGINS, methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'], credentials: true }));
 app.use(express.json({
-  verify: (req, _res, buf) => { if (req.url === '/api/webhooks/github') req.rawBody = buf; }
+  verify: (req, _res, buf) => { if (req.url.startsWith('/api/webhooks/github')) req.rawBody = buf; }
 }));
 
 function requireAuth(req, res, next) {
@@ -501,10 +501,10 @@ app.post('/api/webhooks/github', (req, res) => {
       if (existing) {
         if (action === 'reopened' && existing.column_name === 'completed') {
           db.run('UPDATE tasks SET column_name = ?, completed_at = NULL WHERE id = ?', ['backlog', existing.id]);
-          saveDB();
           const task = rowToTask(queryOne('SELECT * FROM tasks WHERE id = ?', [existing.id]));
-          broadcastEvent('task_moved', { task });
           addHistory('moved', existing.id, `Reopened from GitHub: "${task.title}"`, task.boardId);
+          saveDB();
+          broadcastEvent('task_moved', { task });
         }
         return res.json({ success: true, action: 'updated' });
       }
@@ -531,9 +531,9 @@ app.post('/api/webhooks/github', (req, res) => {
       });
       if (row && row.column_name !== 'completed') {
         db.run('UPDATE tasks SET column_name = ?, completed_at = ? WHERE id = ?', ['completed', Date.now(), row.id]);
-        saveDB();
         const task = rowToTask(queryOne('SELECT * FROM tasks WHERE id = ?', [row.id]));
         addHistory('completed', row.id, `Closed from GitHub: "${task.title}"`, task.boardId);
+        saveDB();
         broadcastEvent('task_moved', { task });
       }
       return res.json({ success: true, action: 'closed' });
@@ -585,7 +585,7 @@ app.get('/api/insights', requireAuth, (req, res) => {
   if (completedAll.length >= 5) {
     const sorted = dayCounts.map((c, i) => ({ day: i, count: c })).sort((a, b) => b.count - a.count);
     const topDays = sorted.slice(0, 2).filter(d => d.count > 0);
-    if (topDays.length >= 2 && topDays[0].count > sorted[2]?.count) {
+    if (topDays.length >= 2 && topDays[0].count > (sorted[2]?.count ?? 0)) {
       insights.push({
         type: 'pattern',
         topDays: topDays.map(d => ({ day: dayNames[d.day], count: d.count })),
@@ -751,6 +751,7 @@ process.on('SIGTERM', () => { if (db) { saveDB(); db.close(); } process.exit(0);
   initBot({
     getAllTasks: () => getAllTasks(),
     addHistory,
+    saveDB,
     insertTask: (task) => { insertTask(task); saveDB(); broadcastEvent('task_created', { task }); },
     moveToCompleted: (taskId) => {
       const row = queryOne('SELECT * FROM tasks WHERE id = ?', [taskId]);

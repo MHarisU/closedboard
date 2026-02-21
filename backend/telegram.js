@@ -1,7 +1,7 @@
 let TelegramBot;
 try { TelegramBot = require('node-telegram-bot-api'); } catch { TelegramBot = null; }
 
-function initBot({ getAllTasks, addHistory, insertTask, moveToCompleted, generateId, EFFECTIVE_SECRET }) {
+function initBot({ getAllTasks, addHistory, saveDB, insertTask, moveToCompleted, generateId, EFFECTIVE_SECRET }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) { console.log('Telegram bot: disabled (no TELEGRAM_BOT_TOKEN)'); return null; }
   if (!TelegramBot) { console.warn('Telegram bot: node-telegram-bot-api not installed'); return null; }
@@ -17,7 +17,7 @@ function initBot({ getAllTasks, addHistory, insertTask, moveToCompleted, generat
 
   const priorityEmoji = { urgent: '🔴', high: '🟠', medium: '🟡', low: '🟢' };
 
-  bot.onText(/\/start/, (msg) => {
+  bot.onText(/\/start(@\w+)?$/, (msg) => {
     if (!isAuth(msg.chat.id)) return;
     bot.sendMessage(msg.chat.id, [
       '*ClosedBoard Bot*', '',
@@ -31,7 +31,7 @@ function initBot({ getAllTasks, addHistory, insertTask, moveToCompleted, generat
     ].join('\n'), { parse_mode: 'Markdown' });
   });
 
-  bot.onText(/\/help/, (msg) => {
+  bot.onText(/\/help(@\w+)?$/, (msg) => {
     if (!isAuth(msg.chat.id)) return;
     bot.sendMessage(msg.chat.id, [
       '*Commands:*',
@@ -55,6 +55,7 @@ function initBot({ getAllTasks, addHistory, insertTask, moveToCompleted, generat
       };
       insertTask(task);
       addHistory('created', task.id, `Created via Telegram: "${title}"`, 'default');
+      saveDB();
       bot.sendMessage(msg.chat.id, `✅ Created: "${title}" in Backlog`);
     } catch (e) {
       bot.sendMessage(msg.chat.id, `❌ Failed: ${e.message}`);
@@ -107,10 +108,10 @@ function initBot({ getAllTasks, addHistory, insertTask, moveToCompleted, generat
       if (!taskId) { bot.sendMessage(msg.chat.id, `Invalid number. You have ${list.length} tasks.`); return; }
     } else {
       const all = getAllTasks();
-      const match = Object.values(all).find(t =>
+      const found = Object.values(all).find(t =>
         t.column !== 'completed' && t.title.toLowerCase().includes(arg.toLowerCase())
       );
-      if (match) taskId = match.id;
+      if (found) taskId = found.id;
     }
 
     if (!taskId) { bot.sendMessage(msg.chat.id, `Task not found: "${arg}"`); return; }
