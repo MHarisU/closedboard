@@ -1,6 +1,6 @@
 {
   "name": "closedboard-api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Backend API for ClosedBoard task tracker",
   "main": "index.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "dev": "node --watch index.js"
   },
   "dependencies": {
+    "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",
     "express": "^4.21.2"
   },

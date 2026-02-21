@@ -1,91 +1,135 @@
-// API Configuration
-const API_BASE = 'https://closedboard-api.onrender.com/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://closedboard-api.onrender.com/api';
 
-// Check if API is available
+const AUTH_KEY = 'closedboard_auth';
+
+function getAuthToken() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    const { token } = JSON.parse(raw);
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
+function authHeaders() {
+  const token = getAuthToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function handleUnauthorized(res) {
+  if (res.status === 401) {
+    localStorage.removeItem(AUTH_KEY);
+    window.location.reload();
+    throw new Error('Session expired');
+  }
+}
+
+// Public: no auth needed
 export async function checkAPIHealth() {
   try {
-    const res = await fetch(`${API_BASE}/health`, { 
-      method: 'GET',
-      mode: 'cors'
-    });
-    if (res.ok) {
-      return true;
-    }
+    const res = await fetch(`${API_BASE}/health`, { method: 'GET', mode: 'cors' });
+    return res.ok;
   } catch (e) {
     console.warn('API unavailable, using localStorage fallback', e);
   }
   return false;
 }
 
-// Fetch all tasks
+// Public: validates PIN server-side
+export async function authenticatePin(pin) {
+  try {
+    const res = await fetch(`${API_BASE}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+    return await res.json();
+  } catch (e) {
+    return { success: false, error: 'Network error' };
+  }
+}
+
 export async function fetchTasks() {
   try {
-    const res = await fetch(`${API_BASE}/tasks`);
+    const res = await fetch(`${API_BASE}/tasks`, { headers: authHeaders() });
+    handleUnauthorized(res);
     if (!res.ok) throw new Error('API error');
     return await res.json();
   } catch (e) {
+    if (e.message === 'Session expired') throw e;
     console.warn('Fetch failed, using localStorage', e);
     return loadFromLocalStorage();
   }
 }
 
-// Create task
 export async function createTask(task) {
   try {
     const res = await fetch(`${API_BASE}/tasks`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify(task)
     });
+    handleUnauthorized(res);
     if (!res.ok) throw new Error('API error');
     return await res.json();
   } catch (e) {
+    if (e.message === 'Session expired') throw e;
     console.error('Create failed', e);
     return { error: e.message };
   }
 }
 
-// Update task
 export async function updateTask(id, updates) {
   try {
     const res = await fetch(`${API_BASE}/tasks/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify(updates)
     });
+    handleUnauthorized(res);
     if (!res.ok) throw new Error('API error');
     return await res.json();
   } catch (e) {
+    if (e.message === 'Session expired') throw e;
     console.error('Update failed', e);
     return { error: e.message };
   }
 }
 
-// Delete task
 export async function deleteTask(id) {
   try {
     const res = await fetch(`${API_BASE}/tasks/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: authHeaders()
     });
+    handleUnauthorized(res);
     if (!res.ok) throw new Error('API error');
     return await res.json();
   } catch (e) {
+    if (e.message === 'Session expired') throw e;
     console.error('Delete failed', e);
     return { error: e.message };
   }
 }
 
-// Move task
 export async function moveTask(id, column) {
   try {
     const res = await fetch(`${API_BASE}/tasks/${id}/move`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ column })
     });
+    handleUnauthorized(res);
     if (!res.ok) throw new Error('API error');
     return await res.json();
   } catch (e) {
+    if (e.message === 'Session expired') throw e;
     console.error('Move failed', e);
     return { error: e.message };
   }
