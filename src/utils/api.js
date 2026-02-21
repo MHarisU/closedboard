@@ -152,6 +152,15 @@ export async function deleteCustomTag(id) {
   } catch (e) { if (e.message === 'Session expired') throw e; return { success: false, error: e.message }; }
 }
 
+// ---------- Insights ----------
+
+export async function fetchInsights(boardId = 'default') {
+  try {
+    const res = await fetch(`${API_BASE}/insights?boardId=${encodeURIComponent(boardId)}`, { headers: authHeaders() });
+    handleUnauthorized(res); if (!res.ok) throw new Error('API error'); return await res.json();
+  } catch (e) { if (e.message === 'Session expired') throw e; return { insights: [] }; }
+}
+
 // ---------- Export ----------
 
 export function getExportUrl(boardId, format = 'json') {

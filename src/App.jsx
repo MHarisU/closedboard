@@ -19,6 +19,7 @@ import MorningBriefing, { shouldShowBriefing, dismissBriefing } from './componen
 import FocusMode from './components/FocusMode';
 import QuickCapture from './components/QuickCapture';
 import DependencyGraph from './components/DependencyGraph';
+import GhostTasks from './components/GhostTasks';
 import { COLUMNS, isTaskBlocked } from './utils/constants';
 
 function SkeletonCard({ isDark }) {
@@ -123,6 +124,7 @@ function AppContent() {
   const [showBriefing, setShowBriefing] = useState(() => shouldShowBriefing());
   const [focusMode, setFocusMode] = useState(false);
   const [depsOpen, setDepsOpen] = useState(false);
+  const [showInsights, setShowInsights] = useState(true);
   const searchInputRef = useRef(null);
 
   useEffect(() => {
@@ -287,6 +289,8 @@ function AppContent() {
         onOpenTagManager={() => setTagManagerOpen(true)}
         onFocusMode={enterFocusMode}
         onOpenDeps={() => setDepsOpen(true)}
+        showInsights={showInsights}
+        onToggleInsights={() => setShowInsights(!showInsights)}
       />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
@@ -320,6 +324,10 @@ function AppContent() {
         )}
 
         {showStats && <StatsPanel tasks={tasks} />}
+        {showInsights && (
+          <GhostTasks boardId={currentBoardId} onMoveTask={handleMoveTask}
+            onUpdateTask={updateTask} connected={connected} />
+        )}
         <LearningDashboard tasks={tasks} onTagFilter={handleTagFilter} customTags={customTags} />
         <CurrentlyWorking tasks={currentlyWorking} />
 

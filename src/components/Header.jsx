@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Shield, Search, X, BarChart3, Archive, Sun, Moon, RefreshCw, Plus, Download, Tag, Crosshair, GitBranch } from 'lucide-react';
+import { Shield, Search, X, BarChart3, Archive, Sun, Moon, RefreshCw, Plus, Download, Tag, Crosshair, GitBranch, Ghost } from 'lucide-react';
 import { downloadExport } from '../utils/api';
 import BoardSelector from './BoardSelector';
 
@@ -9,7 +9,7 @@ export default function Header({
   searchQuery, onSearchChange, showArchive, onToggleArchive,
   showStats, onToggleStats, searchInputRef,
   boards, currentBoardId, onSwitchBoard, onCreateBoard, onUpdateBoard, onDeleteBoard,
-  onOpenTagManager, onFocusMode, onOpenDeps
+  onOpenTagManager, onFocusMode, onOpenDeps, showInsights, onToggleInsights
 }) {
   const { isDark, toggleTheme } = useTheme();
   const [syncText, setSyncText] = useState('');
@@ -112,6 +112,14 @@ export default function Header({
                 ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
               title="Dependencies">
               <GitBranch size={18} />
+            </button>
+
+            <button onClick={onToggleInsights}
+              className={`p-2.5 rounded-xl transition-all duration-200
+                ${showInsights ? isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-100 text-violet-600'
+                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+              title={showInsights ? 'Hide Insights' : 'Show Insights'}>
+              <Ghost size={18} />
             </button>
 
             <button onClick={onOpenTagManager}

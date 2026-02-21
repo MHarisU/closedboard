@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const initSqlJs = require('sql.js');
+const { initBot } = require('./telegram');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -69,7 +70,8 @@ function rowToTask(row) {
     dueDate: row.due_date || null,
     timeEntries: JSON.parse(row.time_entries || '[]'),
     boardId: row.board_id || 'default',
-    blockedBy: JSON.parse(row.blocked_by || '[]')
+    blockedBy: JSON.parse(row.blocked_by || '[]'),
+    githubIssue: row.github_issue ? JSON.parse(row.github_issue) : null
   };
 }
 
@@ -122,13 +124,13 @@ function addHistory(action, taskId, message, boardId = 'default') {
 function insertTask(task) {
   db.run(
     `INSERT INTO tasks (id, title, description, column_name, priority, is_ai_task,
-     tags, subtasks, resources, created_at, completed_at, due_date, time_entries, board_id, blocked_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     tags, subtasks, resources, created_at, completed_at, due_date, time_entries, board_id, blocked_by, github_issue)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [task.id, task.title, task.description, task.column, task.priority,
      task.isAITask ? 1 : 0, JSON.stringify(task.tags), JSON.stringify(task.subtasks),
      JSON.stringify(task.resources), task.createdAt, task.completedAt,
      task.dueDate || null, JSON.stringify(task.timeEntries || []), task.boardId || 'default',
-     JSON.stringify(task.blockedBy || [])]
+     JSON.stringify(task.blockedBy || []), task.githubIssue ? JSON.stringify(task.githubIssue) : null]
   );
 }
 
@@ -136,13 +138,14 @@ function updateTaskRow(task) {
   db.run(
     `UPDATE tasks SET title=?, description=?, column_name=?, priority=?, is_ai_task=?,
      tags=?, subtasks=?, resources=?, created_at=?, completed_at=?,
-     due_date=?, time_entries=?, board_id=?, blocked_by=? WHERE id=?`,
+     due_date=?, time_entries=?, board_id=?, blocked_by=?, github_issue=? WHERE id=?`,
     [task.title, task.description, task.column, task.priority,
      task.isAITask ? 1 : 0, JSON.stringify(task.tags || []),
      JSON.stringify(task.subtasks || []), JSON.stringify(task.resources || []),
      task.createdAt, task.completedAt,
      task.dueDate || null, JSON.stringify(task.timeEntries || []),
-     task.boardId || 'default', JSON.stringify(task.blockedBy || []), task.id]
+     task.boardId || 'default', JSON.stringify(task.blockedBy || []),
+     task.githubIssue ? JSON.stringify(task.githubIssue) : null, task.id]
   );
 }
 
@@ -160,7 +163,9 @@ function broadcastEvent(eventType, data) {
 
 app.use(cors({ origin: CORS_ORIGINS, methods: ['GET','POST','PUT','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'], credentials: true }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => { if (req.url === '/api/webhooks/github') req.rawBody = buf; }
+}));
 
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -310,7 +315,8 @@ app.post('/api/tasks', requireAuth, (req, res) => {
     subtasks: b.subtasks || [], resources: b.resources || [],
     createdAt: Date.now(), completedAt: null,
     dueDate: b.dueDate || null, timeEntries: b.timeEntries || [],
-    boardId: b.boardId || 'default', blockedBy: b.blockedBy || []
+    boardId: b.boardId || 'default', blockedBy: b.blockedBy || [],
+    githubIssue: b.githubIssue || null
   };
   insertTask(task);
   addHistory('created', id, `Created: "${task.title}"`, task.boardId);
@@ -366,6 +372,10 @@ app.post('/api/tasks/:id/move', requireAuth, (req, res) => {
         return b && b.column_name === 'completed';
       });
       if (allDone) broadcastEvent('task_unblocked', { taskId: r.id, title: r.title, unblockedBy: task.title });
+    }
+    if (task.githubIssue && process.env.GITHUB_TOKEN) {
+      const { owner, repo, number } = task.githubIssue;
+      closeGitHubIssue(owner, repo, number).catch(e => console.error('GitHub close failed:', e.message));
     }
   }
 
@@ -448,6 +458,176 @@ app.get('/api/export', requireAuth, (req, res) => {
   res.json(data);
 });
 
+// ---------- GitHub helpers ----------
+
+async function closeGitHubIssue(owner, repo, number) {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return;
+  await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${number}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: 'closed' })
+  });
+}
+
+function verifyGitHubSignature(payload, signature) {
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) return false;
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
+
+const LABEL_TO_TAG = { bug: 'bug', enhancement: 'feature', feature: 'feature', documentation: 'research', 'help wanted': 'improvement' };
+
+app.post('/api/webhooks/github', (req, res) => {
+  const signature = req.headers['x-hub-signature-256'];
+  if (process.env.GITHUB_WEBHOOK_SECRET) {
+    if (!signature || !req.rawBody || !verifyGitHubSignature(req.rawBody, signature)) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+  }
+  const event = req.headers['x-github-event'];
+  const payload = req.body;
+
+  if (event === 'issues') {
+    const { action, issue, repository } = payload;
+    const ghRef = { owner: repository.owner.login, repo: repository.name, number: issue.number, url: issue.html_url };
+
+    if (action === 'opened' || action === 'reopened') {
+      const existing = queryAll('SELECT * FROM tasks').find(r => {
+        const gi = r.github_issue ? JSON.parse(r.github_issue) : null;
+        return gi && gi.owner === ghRef.owner && gi.repo === ghRef.repo && gi.number === ghRef.number;
+      });
+      if (existing) {
+        if (action === 'reopened' && existing.column_name === 'completed') {
+          db.run('UPDATE tasks SET column_name = ?, completed_at = NULL WHERE id = ?', ['backlog', existing.id]);
+          saveDB();
+          const task = rowToTask(queryOne('SELECT * FROM tasks WHERE id = ?', [existing.id]));
+          broadcastEvent('task_moved', { task });
+          addHistory('moved', existing.id, `Reopened from GitHub: "${task.title}"`, task.boardId);
+        }
+        return res.json({ success: true, action: 'updated' });
+      }
+      const tags = (issue.labels || []).map(l => LABEL_TO_TAG[l.name.toLowerCase()]).filter(Boolean);
+      const task = {
+        id: generateId(), title: `[${repository.name}] ${issue.title}`,
+        description: (issue.body || '').substring(0, 500),
+        column: 'backlog', priority: tags.includes('bug') ? 'high' : 'medium',
+        isAITask: false, tags, subtasks: [], resources: [{ title: 'GitHub Issue', url: issue.html_url }],
+        createdAt: Date.now(), completedAt: null, dueDate: null, timeEntries: [],
+        boardId: 'default', blockedBy: [], githubIssue: ghRef
+      };
+      insertTask(task);
+      addHistory('created', task.id, `From GitHub: "${task.title}"`, task.boardId);
+      saveDB();
+      broadcastEvent('task_created', { task });
+      return res.json({ success: true, action: 'created', taskId: task.id });
+    }
+
+    if (action === 'closed') {
+      const row = queryAll('SELECT * FROM tasks').find(r => {
+        const gi = r.github_issue ? JSON.parse(r.github_issue) : null;
+        return gi && gi.owner === ghRef.owner && gi.repo === ghRef.repo && gi.number === ghRef.number;
+      });
+      if (row && row.column_name !== 'completed') {
+        db.run('UPDATE tasks SET column_name = ?, completed_at = ? WHERE id = ?', ['completed', Date.now(), row.id]);
+        saveDB();
+        const task = rowToTask(queryOne('SELECT * FROM tasks WHERE id = ?', [row.id]));
+        addHistory('completed', row.id, `Closed from GitHub: "${task.title}"`, task.boardId);
+        broadcastEvent('task_moved', { task });
+      }
+      return res.json({ success: true, action: 'closed' });
+    }
+  }
+
+  res.json({ success: true, action: 'ignored' });
+});
+
+// ---------- Insights (Ghost Tasks) ----------
+
+app.get('/api/insights', requireAuth, (req, res) => {
+  const boardId = req.query.boardId || 'default';
+  const tasks = getAllTasks(boardId);
+  const taskList = Object.values(tasks);
+  const now = Date.now();
+  const DAY_MS = 86400000;
+  const insights = [];
+
+  // 1. Stale detection — tasks created >7 days ago, still in backlog/inProgress
+  for (const t of taskList) {
+    if (t.column === 'completed') continue;
+    const ageDays = Math.floor((now - t.createdAt) / DAY_MS);
+    if (ageDays >= 7) {
+      insights.push({
+        type: 'stale', taskId: t.id, taskTitle: t.title, column: t.column, daysAgo: ageDays,
+        message: `You created "${t.title}" ${ageDays} days ago and it hasn't moved. Still relevant?`
+      });
+    }
+  }
+
+  // 2. Velocity prediction
+  const completed14d = taskList.filter(t => t.completedAt && (now - t.completedAt) < 14 * DAY_MS);
+  const velocity = completed14d.length / 14;
+  const backlogCount = taskList.filter(t => t.column === 'backlog').length;
+  if (velocity > 0 && backlogCount > 0) {
+    const estDays = Math.round((backlogCount / velocity) * 10) / 10;
+    insights.push({
+      type: 'velocity', velocity: Math.round(velocity * 100) / 100, backlogCount, estimatedDays: estDays,
+      message: `Based on your average of ${(Math.round(velocity * 10) / 10)} tasks/day, your ${backlogCount} backlog tasks will take ~${estDays} days`
+    });
+  }
+
+  // 3. Day-of-week pattern recognition
+  const dayNames = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+  const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+  const completedAll = taskList.filter(t => t.completedAt);
+  for (const t of completedAll) dayCounts[new Date(t.completedAt).getDay()]++;
+  if (completedAll.length >= 5) {
+    const sorted = dayCounts.map((c, i) => ({ day: i, count: c })).sort((a, b) => b.count - a.count);
+    const topDays = sorted.slice(0, 2).filter(d => d.count > 0);
+    if (topDays.length >= 2 && topDays[0].count > sorted[2]?.count) {
+      insights.push({
+        type: 'pattern',
+        topDays: topDays.map(d => ({ day: dayNames[d.day], count: d.count })),
+        message: `You complete more tasks on ${topDays.map(d => dayNames[d.day]).join(' and ')}. Consider scheduling hard tasks then.`
+      });
+    }
+  }
+
+  // 4. Subtask completion estimation
+  for (const t of taskList) {
+    if (t.column === 'completed' || !t.subtasks || t.subtasks.length < 3) continue;
+    const done = t.subtasks.filter(s => s.completed).length;
+    if (done === 0 || done === t.subtasks.length) continue;
+    const elapsedDays = Math.max((now - t.createdAt) / DAY_MS, 1);
+    const pacePerDay = done / elapsedDays;
+    const remaining = t.subtasks.length - done;
+    const estDays = Math.round((remaining / pacePerDay) * 10) / 10;
+    insights.push({
+      type: 'subtask_estimate', taskId: t.id, taskTitle: t.title,
+      done, total: t.subtasks.length, estimatedDays: estDays,
+      message: `${done}/${t.subtasks.length} subtasks done, ~${estDays} days remaining at your pace`
+    });
+  }
+
+  // 5. Streak — consecutive days with completions (bonus)
+  if (completedAll.length > 0) {
+    const completionDays = new Set(completedAll.map(t => Math.floor(t.completedAt / DAY_MS)));
+    let streak = 0;
+    let day = Math.floor(now / DAY_MS);
+    while (completionDays.has(day) || (streak === 0 && completionDays.has(day - 1))) {
+      if (streak === 0 && !completionDays.has(day)) day--;
+      streak++;
+      day--;
+    }
+    if (streak >= 2) {
+      insights.push({ type: 'streak', streak, message: `You're on a ${streak}-day completion streak! Keep it going.` });
+    }
+  }
+
+  res.json({ insights });
+});
+
 // ---------- Migration ----------
 
 const DEFAULT_TAGS = {
@@ -525,6 +705,7 @@ process.on('SIGTERM', () => { if (db) { saveDB(); db.close(); } process.exit(0);
   if (!columnExists('tasks', 'time_entries')) db.run("ALTER TABLE tasks ADD COLUMN time_entries TEXT DEFAULT '[]'");
   if (!columnExists('tasks', 'board_id')) db.run("ALTER TABLE tasks ADD COLUMN board_id TEXT DEFAULT 'default'");
   if (!columnExists('tasks', 'blocked_by')) db.run("ALTER TABLE tasks ADD COLUMN blocked_by TEXT DEFAULT '[]'");
+  if (!columnExists('tasks', 'github_issue')) db.run("ALTER TABLE tasks ADD COLUMN github_issue TEXT DEFAULT NULL");
   if (!columnExists('history', 'board_id')) db.run("ALTER TABLE history ADD COLUMN board_id TEXT DEFAULT 'default'");
 
   // Boards table
@@ -563,5 +744,28 @@ process.on('SIGTERM', () => { if (db) { saveDB(); db.close(); } process.exit(0);
     console.log(`Storage: SQLite via sql.js (${DB_PATH})`);
     console.log(`Tasks: ${taskCount} | SSE: enabled | Auth: ${API_SECRET ? 'set' : 'default'}`);
     console.log(`CORS: ${CORS_ORIGINS.join(', ')}`);
+    if (process.env.GITHUB_WEBHOOK_SECRET) console.log('GitHub webhook: enabled');
+    if (process.env.GITHUB_TOKEN) console.log('GitHub auto-close: enabled');
+  });
+
+  initBot({
+    getAllTasks: () => getAllTasks(),
+    addHistory,
+    insertTask: (task) => { insertTask(task); saveDB(); broadcastEvent('task_created', { task }); },
+    moveToCompleted: (taskId) => {
+      const row = queryOne('SELECT * FROM tasks WHERE id = ?', [taskId]);
+      if (!row || row.column_name === 'completed') return null;
+      db.run('UPDATE tasks SET column_name = ?, completed_at = ? WHERE id = ?', ['completed', Date.now(), taskId]);
+      saveDB();
+      const task = rowToTask(queryOne('SELECT * FROM tasks WHERE id = ?', [taskId]));
+      addHistory('completed', taskId, `Completed via Telegram: "${task.title}"`, task.boardId);
+      broadcastEvent('task_moved', { task });
+      if (task.githubIssue && process.env.GITHUB_TOKEN) {
+        closeGitHubIssue(task.githubIssue.owner, task.githubIssue.repo, task.githubIssue.number).catch(() => {});
+      }
+      return task;
+    },
+    generateId,
+    EFFECTIVE_SECRET
   });
 })().catch(err => { console.error('Startup failed:', err); process.exit(1); });
