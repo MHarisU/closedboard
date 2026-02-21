@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <rect width="100" height="100" rx="20" fill="#3b82f6"/>
-  <text x="50" y="65" font-size="50" text-anchor="middle" fill="white">🔐</text>
+  <path d="M50 18 L28 28 V48 C28 65 38 76 50 82 C62 76 72 65 72 48 V28 Z" fill="none" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M40 50 L47 57 L60 43" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

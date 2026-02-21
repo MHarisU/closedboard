@@ -445,10 +445,10 @@ completed   -> "Completed"    (green)
 ### Priorities (`PRIORITIES`)
 
 ```
-low    -> "Low"    (slate,  ○)
-medium -> "Medium" (yellow, ◐)
-high   -> "High"   (orange, ●)
-urgent -> "Urgent" (red,    fire emoji)
+low    -> "Low"    (slate,  Circle icon)
+medium -> "Medium" (yellow, CircleDot icon)
+high   -> "High"   (orange, AlertCircle icon)
+urgent -> "Urgent" (red,    Flame icon)
 ```
 
 ### Tags (`TAGS`)
