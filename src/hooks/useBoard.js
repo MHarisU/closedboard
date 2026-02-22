@@ -114,7 +114,7 @@ export const useBoard = (onTaskUnblocked) => {
       setLastSync(Date.now());
     });
 
-    source.addEventListener('board_created', (e) => { const { board } = JSON.parse(e.data); setBoards(prev => [...prev, board]); });
+    source.addEventListener('board_created', (e) => { const { board } = JSON.parse(e.data); setBoards(prev => prev.some(b => b.id === board.id) ? prev : [...prev, board]); });
     source.addEventListener('board_updated', (e) => { const { board } = JSON.parse(e.data); setBoards(prev => prev.map(b => b.id === board.id ? board : b)); });
     source.addEventListener('board_deleted', (e) => {
       const { boardId } = JSON.parse(e.data);
