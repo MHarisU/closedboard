@@ -3,7 +3,6 @@ const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const initSqlJs = require('sql.js');
 const { initBot } = require('./telegram');
 
@@ -32,7 +31,7 @@ function saveDB() {
   try {
     const data = db.export();
     const buffer = Buffer.from(data);
-    const tmp = path.join(os.tmpdir(), `closedboard_${process.pid}_${Date.now()}.db`);
+    const tmp = path.join(path.dirname(DB_PATH), `.closedboard_${process.pid}_${Date.now()}.tmp`);
     fs.writeFileSync(tmp, buffer);
     fs.renameSync(tmp, DB_PATH);
   } catch (e) { console.error('Failed to save database:', e.message); }
