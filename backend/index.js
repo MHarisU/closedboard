@@ -55,7 +55,9 @@ function queryOne(sql, params = []) {
   return result;
 }
 
+const VALID_TABLES = ['tasks', 'history', 'boards', 'custom_tags'];
 function columnExists(table, column) {
+  if (!VALID_TABLES.includes(table)) return false;
   return queryAll(`PRAGMA table_info(${table})`).some(c => c.name === column);
 }
 
@@ -477,7 +479,10 @@ function verifyGitHubSignature(payload, signature) {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   if (!secret) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  const expectedBuf = Buffer.from(expected);
+  const signatureBuf = Buffer.from(signature);
+  if (expectedBuf.length !== signatureBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, signatureBuf);
 }
 
 const LABEL_TO_TAG = { bug: 'bug', enhancement: 'feature', feature: 'feature', documentation: 'research', 'help wanted': 'improvement' };
@@ -600,7 +605,7 @@ app.get('/api/insights', requireAuth, (req, res) => {
   // 4. Subtask completion estimation
   for (const t of taskList) {
     if (t.column === 'completed' || !t.subtasks || t.subtasks.length < 3) continue;
-    const done = t.subtasks.filter(s => s.completed).length;
+    const done = t.subtasks.filter(s => s.done).length;
     if (done === 0 || done === t.subtasks.length) continue;
     const elapsedDays = Math.max((now - t.createdAt) / DAY_MS, 1);
     const pacePerDay = done / elapsedDays;

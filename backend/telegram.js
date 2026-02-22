@@ -43,7 +43,7 @@ function initBot({ getAllTasks, addHistory, saveDB, insertTask, moveToCompleted,
     ].join('\n'), { parse_mode: 'Markdown' });
   });
 
-  bot.onText(/\/add (.+)/, (msg, match) => {
+  bot.onText(/\/add(?:@\w+)? (.+)/, (msg, match) => {
     if (!isAuth(msg.chat.id)) return;
     const title = match[1].trim();
     try {
@@ -77,7 +77,7 @@ function initBot({ getAllTasks, addHistory, saveDB, insertTask, moveToCompleted,
       { parse_mode: 'Markdown' });
   };
 
-  bot.onText(/\/list$/, (msg) => {
+  bot.onText(/\/list(?:@\w+)?$/, (msg) => {
     if (!isAuth(msg.chat.id)) return;
     const all = getAllTasks();
     const inProgress = Object.values(all)
@@ -86,7 +86,7 @@ function initBot({ getAllTasks, addHistory, saveDB, insertTask, moveToCompleted,
     sendTaskList(msg.chat.id, inProgress, 'In Progress');
   });
 
-  bot.onText(/\/backlog$/, (msg) => {
+  bot.onText(/\/backlog(?:@\w+)?$/, (msg) => {
     if (!isAuth(msg.chat.id)) return;
     const all = getAllTasks();
     const backlog = Object.values(all)
@@ -95,7 +95,7 @@ function initBot({ getAllTasks, addHistory, saveDB, insertTask, moveToCompleted,
     sendTaskList(msg.chat.id, backlog, 'Backlog');
   });
 
-  bot.onText(/\/done (.+)/, (msg, match) => {
+  bot.onText(/\/done(?:@\w+)? (.+)/, (msg, match) => {
     if (!isAuth(msg.chat.id)) return;
     const arg = match[1].trim();
     const idx = parseInt(arg, 10);
@@ -120,7 +120,7 @@ function initBot({ getAllTasks, addHistory, saveDB, insertTask, moveToCompleted,
     else bot.sendMessage(msg.chat.id, 'Task not found or already completed.');
   });
 
-  bot.onText(/\/status$/, (msg) => {
+  bot.onText(/\/status(?:@\w+)?$/, (msg) => {
     if (!isAuth(msg.chat.id)) return;
     const all = Object.values(getAllTasks());
     const backlog = all.filter(t => t.column === 'backlog').length;

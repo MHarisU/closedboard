@@ -164,7 +164,6 @@ export async function fetchInsights(boardId = 'default') {
 // ---------- Export ----------
 
 export function getExportUrl(boardId, format = 'json') {
-  const token = getAuthToken();
   const params = new URLSearchParams({ format });
   if (boardId) params.set('boardId', boardId);
   return `${API_BASE}/export?${params}`;

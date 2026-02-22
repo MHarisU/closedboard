@@ -18,13 +18,13 @@ export default function FocusMode({ task, onExit, onStartTimer, onStopTimer, act
   const [phase, setPhase] = useState('idle');
   const [timeLeft, setTimeLeft] = useState(WORK_SECS);
   const [pomodoroCount, setPomodoroCount] = useState(0);
+  const [phaseDuration, setPhaseDuration] = useState(WORK_SECS);
   const intervalRef = useRef(null);
   const originalTitle = useRef(document.title);
 
   const isRunning = phase === 'work' || phase === 'break';
   const isWork = phase === 'work';
-  const totalSecs = isWork ? WORK_SECS : (pomodoroCount > 0 && pomodoroCount % LONG_BREAK_AFTER === 0) ? LONG_BREAK_SECS : SHORT_BREAK_SECS;
-  const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
+  const progress = phaseDuration > 0 ? ((phaseDuration - timeLeft) / phaseDuration) * 100 : 0;
   const PIcon = priorityIcons[task?.priority] || Circle;
   const accumulatedTime = totalTimeMs(task?.timeEntries);
 
@@ -49,9 +49,11 @@ export default function FocusMode({ task, onExit, onStartTimer, onStopTimer, act
             const count = pomodoroCount + 1;
             setPomodoroCount(count);
             const breakSecs = count % LONG_BREAK_AFTER === 0 ? LONG_BREAK_SECS : SHORT_BREAK_SECS;
+            setPhaseDuration(breakSecs);
             setPhase('break');
             return breakSecs;
           } else {
+            setPhaseDuration(WORK_SECS);
             setPhase('idle');
             return WORK_SECS;
           }
@@ -74,6 +76,7 @@ export default function FocusMode({ task, onExit, onStartTimer, onStopTimer, act
 
   const handleStart = () => {
     if (phase === 'idle') {
+      setPhaseDuration(WORK_SECS);
       setPhase('work');
       setTimeLeft(WORK_SECS);
       onStartTimer?.(task.id);
@@ -95,6 +98,7 @@ export default function FocusMode({ task, onExit, onStartTimer, onStopTimer, act
   const handleReset = () => {
     clearTick();
     if (phase === 'work' || phase === 'paused-work') onStopTimer?.(task.id);
+    setPhaseDuration(WORK_SECS);
     setPhase('idle');
     setTimeLeft(WORK_SECS);
   };
@@ -207,7 +211,7 @@ export default function FocusMode({ task, onExit, onStartTimer, onStopTimer, act
         </p>
 
         {phase === 'break' && (
-          <button onClick={() => { setPhase('idle'); setTimeLeft(WORK_SECS); }}
+          <button onClick={() => { setPhaseDuration(WORK_SECS); setPhase('idle'); setTimeLeft(WORK_SECS); }}
             className={`mt-4 text-xs px-4 py-2 rounded-lg transition-colors font-medium
               ${isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
             Skip break

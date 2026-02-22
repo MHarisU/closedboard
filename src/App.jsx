@@ -155,25 +155,37 @@ function AppContent() {
   const handleDeleteTask = useCallback(async (taskId) => {
     const task = tasks[taskId];
     if (!task) return;
+    const dependents = Object.values(tasks).filter(t => t.blockedBy?.includes(taskId));
     await deleteTask(taskId);
     toast.success(`Deleted: ${task.title}`, {
       duration: 5000,
       action: {
         label: 'Undo',
         onClick: async () => {
-          await addTask({
+          const result = await addTask({
             title: task.title, description: task.description,
             column: task.column, priority: task.priority,
             isAITask: task.isAITask, tags: task.tags,
             subtasks: task.subtasks, resources: task.resources,
             dueDate: task.dueDate, timeEntries: task.timeEntries,
-            blockedBy: task.blockedBy
+            blockedBy: task.blockedBy,
+            completedAt: task.completedAt,
+            boardId: task.boardId,
+            githubIssue: task.githubIssue
           });
+          const newId = result?.task?.id;
+          if (newId && dependents.length > 0) {
+            for (const dep of dependents) {
+              await updateTask(dep.id, {
+                blockedBy: dep.blockedBy.map(bid => bid === taskId ? newId : bid)
+              });
+            }
+          }
           toast.info('Task restored');
         }
       }
     });
-  }, [tasks, deleteTask, addTask, toast]);
+  }, [tasks, deleteTask, addTask, updateTask, toast]);
 
   const handleStartTimer = async (taskId) => {
     if (activeTimerTaskId && activeTimerTaskId !== taskId) {

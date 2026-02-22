@@ -12,10 +12,10 @@ export function useKeyboardShortcuts({
     const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
     if (e.key === 'Escape') {
-      if (focusedTaskId) {
-        onFocusTask?.(null);
-      } else {
+      if (isModalOpen) {
         onCloseModal?.();
+      } else if (focusedTaskId) {
+        onFocusTask?.(null);
       }
       return;
     }

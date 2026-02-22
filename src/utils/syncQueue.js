@@ -27,8 +27,9 @@ export async function replayQueue(apiFns) {
   const queue = getQueue();
   if (queue.length === 0) return { replayed: 0, remaining: 0 };
 
-  const failed = [];
-  for (const op of queue) {
+  let replayed = 0;
+  for (let i = 0; i < queue.length; i++) {
+    const op = queue[i];
     let result;
     try {
       switch (op.type) {
@@ -38,15 +39,18 @@ export async function replayQueue(apiFns) {
         case 'move':   result = await apiFns.move(op.taskId, op.data.column); break;
       }
     } catch {
-      failed.push(op);
-      break;
+      const remaining = queue.slice(i);
+      saveQueue(remaining);
+      return { replayed, remaining: remaining.length };
     }
     if (result?.offline) {
-      failed.push(op);
-      break;
+      const remaining = queue.slice(i);
+      saveQueue(remaining);
+      return { replayed, remaining: remaining.length };
     }
+    replayed++;
   }
 
-  saveQueue(failed);
-  return { replayed: queue.length - failed.length, remaining: failed.length };
+  saveQueue([]);
+  return { replayed, remaining: 0 };
 }

@@ -35,7 +35,7 @@ export default function GhostTasks({ boardId, onMoveTask, onUpdateTask, connecte
   useEffect(() => { load(); }, [load]);
 
   const dismiss = (insight) => {
-    const key = `${insight.type}_${insight.taskId || 'global'}`;
+    const key = `${insight.type}_${insight.taskId || 'global'}_${boardId}`;
     const updated = [...dismissed, key];
     setDismissed(updated);
     localStorage.setItem('closedboard_dismissed_insights', JSON.stringify(updated));
@@ -54,7 +54,7 @@ export default function GhostTasks({ boardId, onMoveTask, onUpdateTask, connecte
   };
 
   const visible = insights.filter(i => {
-    const key = `${i.type}_${i.taskId || 'global'}`;
+    const key = `${i.type}_${i.taskId || 'global'}_${boardId}`;
     return !dismissed.includes(key);
   });
 
