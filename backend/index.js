@@ -12,8 +12,11 @@ const PORT = process.env.PORT || 3001;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'closedboard.db');
 
 const API_SECRET = process.env.API_SECRET;
-if (!API_SECRET) console.warn('WARNING: API_SECRET not set. Defaulting to "53372".');
-const EFFECTIVE_SECRET = API_SECRET || '53372';
+if (!API_SECRET) {
+  console.error('FATAL: API_SECRET environment variable is required.');
+  process.exit(1);
+}
+const EFFECTIVE_SECRET = API_SECRET;
 
 const CORS_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())

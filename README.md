@@ -1,6 +1,6 @@
 # ClosedBoard
 
-A PIN-protected Kanban board and task tracker with an integrated learning dashboard, built with React 18, Vite, and Tailwind CSS. Designed as a personal productivity tool for tracking AI assistant tasks, personal projects, and structured learning goals.
+A full-featured Kanban board and productivity system with real-time sync, time tracking, task dependencies, and integrations. Built with React 18, Vite, Tailwind CSS, and a Node.js/Express backend with SQLite.
 
 **Live:** https://mharisu.github.io/closedboard/
 
@@ -8,63 +8,64 @@ A PIN-protected Kanban board and task tracker with an integrated learning dashbo
 
 ## Table of Contents
 
-- [Architecture Overview](#architecture-overview)
+- [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Data Model](#data-model)
-- [Application Flow](#application-flow)
-- [Component Reference](#component-reference)
-- [State Management](#state-management)
-- [API Layer & Offline Fallback](#api-layer--offline-fallback)
-- [Theming System](#theming-system)
-- [Authentication](#authentication)
+- [API Reference](#api-reference)
+- [Features](#features)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Integrations](#integrations)
 - [Deployment](#deployment)
-- [Configuration Constants](#configuration-constants)
-- [Known Limitations](#known-limitations)
-- [Future Development Roadmap](#future-development-roadmap)
+- [Configuration](#configuration)
 - [Getting Started](#getting-started)
+- [Known Limitations](#known-limitations)
 
 ---
 
-## Architecture Overview
+## Architecture
 
 ```
-Entry Point
-  main.jsx
-    └── PinGate (auth wall, PIN = 53372, 24h session via localStorage)
-         └── App (wraps AppContent in providers)
-              ├── ThemeProvider (dark/light, persisted to localStorage)
-              └── ToastProvider (global notification system)
-                   └── AppContent (main application shell)
-                        ├── Header (search, nav, actions, sync status)
-                        ├── StatsPanel (streak, completion rate, progress bar)
-                        ├── LearningDashboard (per-topic progress, resources)
-                        ├── CurrentlyWorking (AI tasks in progress)
-                        ├── Column x3 (backlog / inProgress / completed)
-                        │    └── TaskCard (drag/drop, swipe, subtasks, tags)
-                        ├── ActivityFeed (chronological action history)
-                        ├── TaskModal (create/edit form with subtasks & resources)
-                        └── ToastContainer (notification popups)
+Frontend (GitHub Pages)                      Backend (Render)
+───────────────────────                      ────────────────
+React 18 + Vite + Tailwind                   Node.js + Express + sql.js (SQLite)
+                                             
+PinGate (auth via API)                       POST /api/auth (validate PIN)
+  └── App                                    GET  /api/events (SSE stream)
+       ├── ThemeProvider                     
+       ├── ToastProvider                      Protected endpoints (Bearer token):
+       └── AppContent                         ├── Tasks CRUD + move + timer
+            ├── MorningBriefing (pre-10AM)    ├── Boards CRUD
+            ├── FocusMode (Pomodoro)          ├── Tags CRUD
+            ├── Header + BoardSelector        ├── Insights (pattern analysis)
+            ├── GhostTasks (insights)         ├── Export (JSON/CSV)
+            ├── StatsPanel                    └── Webhooks (GitHub)
+            ├── LearningDashboard            
+            ├── Column x3 → TaskCard         Telegram Bot (polling mode)
+            ├── TaskModal + TagManager        ├── /add, /list, /done, /status
+            ├── DependencyGraph              
+            ├── QuickCapture                 
+            └── ActivityFeed                 
 ```
 
-**Data flow is unidirectional:** `useBoard` hook owns all task state. Components receive data and callbacks as props. Context is only used for cross-cutting concerns (theme, toasts).
+**Data flow:** `useBoard` hook owns all task state. Components receive data and callbacks as props. Contexts are used only for theme and toasts. All mutations are optimistic with rollback on failure and offline queueing.
+
+**Real-time:** Server-Sent Events (SSE) push updates to all connected clients instantly. No polling.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Version | Purpose |
-|-------|-----------|---------|---------|
-| UI Framework | React | 18.2.0 | Component rendering, hooks-based state |
-| Build Tool | Vite | 5.1.0 | Dev server, HMR, production bundling |
-| Styling | Tailwind CSS | 3.4.1 | Utility-first CSS with dark mode (`class` strategy) |
-| CSS Processing | PostCSS + Autoprefixer | 8.4.35 / 10.4.17 | CSS transforms and vendor prefixing |
-| Font | Inter (Google Fonts) | -- | Primary typeface loaded via CDN |
-| Deployment | GitHub Pages | -- | Static hosting via GitHub Actions |
-| Data Persistence | localStorage + REST API | -- | Dual-mode: API-first with localStorage fallback |
-
-**Zero external runtime dependencies** beyond React and ReactDOM. No router, no state library, no drag-and-drop library.
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Frontend | React 18, Vite 5, Tailwind CSS 3 | UI, build tooling, styling |
+| Icons | Lucide React | Professional icon set, dark/light adaptive |
+| Backend | Node.js, Express | REST API, SSE, webhooks |
+| Database | sql.js (WebAssembly SQLite) | Persistent storage, atomic writes |
+| Auth | PIN-based, Bearer token | Client gate + API protection |
+| Hosting | GitHub Pages (frontend), Render (backend) | Free tier deployment |
+| CI/CD | GitHub Actions | Auto-deploy on push to main |
+| Bot | node-telegram-bot-api | Telegram task management |
 
 ---
 
@@ -72,492 +73,334 @@ Entry Point
 
 ```
 closedboard/
-├── .github/workflows/
-│   └── deploy.yml              # GitHub Actions: build + deploy to GitHub Pages
-├── dist/                       # Pre-built production bundle (committed to repo)
+├── .github/workflows/deploy.yml    # CI/CD: build + deploy to GitHub Pages
+├── backend/
+│   ├── index.js                    # Express server, all API routes, SSE, SQLite
+│   ├── telegram.js                 # Telegram bot module
+│   ├── package.json                # Backend dependencies
+│   ├── render.yaml                 # Render deployment blueprint
+│   ├── .env.example                # Environment variable template
+│   └── .gitignore
+├── dist/                           # Production build (committed for GitHub Pages)
 ├── public/
-│   ├── favicon.svg             # App icon
-│   └── manifest.json           # PWA manifest (standalone display mode)
+│   ├── favicon.svg
+│   └── manifest.json               # PWA manifest
 ├── src/
-│   ├── main.jsx                # ReactDOM entry: PinGate wraps App
-│   ├── App.jsx                 # Root component: providers + AppContent
-│   ├── index.css               # Global styles: CSS vars, animations, scrollbar, drag
+│   ├── main.jsx                    # Entry: PinGate wraps App
+│   ├── App.jsx                     # Root: providers, routing between modes
+│   ├── index.css                   # Global styles, CSS vars, animations
 │   ├── components/
-│   │   ├── PinGate.jsx         # PIN authentication wall (5-digit, 24h session)
-│   │   ├── Header.jsx          # Sticky top bar: logo, search, theme, actions
-│   │   ├── Column.jsx          # Kanban column: drag-over handling, empty states
-│   │   ├── TaskCard.jsx        # Task display: drag, swipe, subtasks, tags, priority
-│   │   ├── TaskModal.jsx       # Create/edit form: title, desc, tags, subtasks, resources
-│   │   ├── CurrentlyWorking.jsx# AI task status banner (isAITask + inProgress)
-│   │   ├── StatsPanel.jsx      # Metrics: streak, today/week completions, rate, progress
-│   │   ├── LearningDashboard.jsx# Per-topic learning progress with concept tracking
-│   │   ├── ActivityFeed.jsx    # Chronological history log (last 15 entries)
-│   │   └── ToastContainer.jsx  # Notification toasts (success/error/info)
+│   │   ├── PinGate.jsx             # PIN auth (validates against backend API)
+│   │   ├── Header.jsx              # Nav bar: search, board selector, actions
+│   │   ├── BoardSelector.jsx       # Board switcher dropdown
+│   │   ├── Column.jsx              # Kanban column with drag-drop zone
+│   │   ├── TaskCard.jsx            # Task display: priority, tags, timer, deps
+│   │   ├── TaskModal.jsx           # Create/edit: subtasks, resources, blockers
+│   │   ├── TagManager.jsx          # Custom tag CRUD modal
+│   │   ├── StatsPanel.jsx          # Metrics: streak, rate, overdue, time tracked
+│   │   ├── LearningDashboard.jsx   # Per-topic learning progress
+│   │   ├── CurrentlyWorking.jsx    # AI task status banner
+│   │   ├── ActivityFeed.jsx        # Chronological history log
+│   │   ├── MorningBriefing.jsx     # Daily briefing view (before 10 AM)
+│   │   ├── FocusMode.jsx           # Pomodoro timer + distraction-free mode
+│   │   ├── QuickCapture.jsx        # Persistent bottom input for rapid task creation
+│   │   ├── GhostTasks.jsx          # AI pattern detection insights panel
+│   │   ├── DependencyGraph.jsx     # Task dependency visualization modal
+│   │   ├── ErrorBoundary.jsx       # React error boundary
+│   │   └── ToastContainer.jsx      # Notification toasts
 │   ├── contexts/
-│   │   ├── ThemeContext.jsx     # Dark/light theme with localStorage persistence
-│   │   └── ToastContext.jsx     # Toast notification state + convenience methods
+│   │   ├── ThemeContext.jsx         # Dark/light theme persistence
+│   │   └── ToastContext.jsx         # Toast notification state
 │   ├── hooks/
-│   │   ├── useBoard.js          # Core state: tasks, history, CRUD, optimistic updates
-│   │   └── useKeyboardShortcuts.js # Global keyboard shortcuts (N, R, /, Esc)
+│   │   ├── useBoard.js             # Core state: tasks, boards, tags, SSE, sync
+│   │   └── useKeyboardShortcuts.js # Global keyboard navigation
 │   └── utils/
-│       ├── constants.js         # Column/priority/tag configs, formatTime, learning helpers
-│       └── api.js               # REST client + localStorage fallback with demo data
-├── index.html                  # HTML shell: meta tags, PWA config, font preconnect
-├── haris.json                  # Owner metadata: { name, id, timestamp }
-├── package.json                # Dependencies and scripts
-├── vite.config.js              # Vite config: React plugin, base path /closedboard/
-├── tailwind.config.js          # Tailwind: dark mode (class), custom colors/animations
-└── postcss.config.js           # PostCSS: tailwindcss + autoprefixer plugins
+│       ├── constants.js            # Columns, priorities, helpers, dep logic
+│       ├── api.js                  # REST client, auth headers, export, insights
+│       └── syncQueue.js            # Offline operation queue (localStorage)
+├── index.html
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+└── postcss.config.js
 ```
 
 ---
 
 ## Data Model
 
-### Task Object
+### Task
 
 ```js
 {
-  id: string,              // Unique ID (server-generated or "temp_<timestamp>_<random>")
-  title: string,           // Required. Task name
-  description: string,     // Optional. Details
-  column: string,          // "backlog" | "inProgress" | "completed"
-  priority: string,        // "low" | "medium" | "high" | "urgent"
-  isAITask: boolean,       // If true, shows robot icon + appears in CurrentlyWorking
-  tags: string[],          // Array of tag IDs: "feature", "bug", "learning", "react-native", etc.
-  subtasks: Subtask[],     // Checklist items within a task
-  resources: Resource[],   // Learning resources (only relevant for learning-tagged tasks)
-  createdAt: number,       // Unix timestamp (ms)
-  completedAt: number|null // Set when moved to "completed" column
+  id: string,                // Server-generated unique ID
+  title: string,             // Task name
+  description: string,       // Details (optional)
+  column: string,            // "backlog" | "inProgress" | "completed"
+  priority: string,          // "low" | "medium" | "high" | "urgent"
+  isAITask: boolean,         // Shows in CurrentlyWorking panel
+  tags: string[],            // Tag IDs: "feature", "bug", "learning", etc.
+  subtasks: Subtask[],       // Checklist items
+  resources: Resource[],     // Links (learning tasks)
+  createdAt: number,         // Unix timestamp (ms)
+  completedAt: number|null,  // Set when moved to completed
+  dueDate: number|null,      // Optional deadline (ms)
+  timeEntries: TimeEntry[],  // Start/stop timer log
+  boardId: string,           // Which board this belongs to
+  blockedBy: string[],       // Task IDs that must complete first
+  githubIssue: object|null   // { owner, repo, number, url } if synced
 }
 ```
 
-### Subtask Object
+### Supporting Objects
 
 ```js
-{
-  text: string,            // Subtask description
-  done: boolean            // Completion state
-}
-```
-
-### Resource Object (Learning Tasks)
-
-```js
-{
-  title: string,           // Display name
-  url: string              // External link
-}
-```
-
-### History Entry
-
-```js
-{
-  id: string,              // Unique ID
-  action: string,          // "created" | "completed" | "moved" | "updated" | "deleted"
-  taskId: string,          // Reference to task
-  timestamp: number,       // Unix timestamp (ms)
-  message: string          // Human-readable description
-}
-```
-
-### Board State Shape (returned by API / stored in localStorage)
-
-```js
-{
-  tasks: { [taskId]: Task },  // Object map for O(1) lookups
-  history: HistoryEntry[],    // Newest first, capped at 50 entries
-  meta: { lastUpdated: number }
-}
+Subtask:    { text: string, completed: boolean }
+Resource:   { title: string, url: string }
+TimeEntry:  { start: number, end: number|undefined }
+Board:      { id: string, name: string, color: string, createdAt: number }
+Tag:        { id: string, label: string, color: string, isLearning: boolean, isLearningTopic: boolean }
+History:    { id: string, action: string, taskId: string, timestamp: number, message: string, boardId: string }
 ```
 
 ---
 
-## Application Flow
+## API Reference
 
-### Startup Sequence
+**Base URL:** Set via `VITE_API_URL` env var (defaults to Render deployment)
 
-1. `main.jsx` renders `<PinGate>` wrapping `<App>`
-2. `PinGate` checks `localStorage["closedboard_auth"]` for a valid session (< 24h old)
-3. If no valid session, renders PIN input (5-digit numeric, PIN: `53372`)
-4. On successful PIN entry, stores `{ timestamp }` in localStorage and renders children
-5. `App` wraps `AppContent` in `ThemeProvider` > `ToastProvider`
-6. `AppContent` calls `useBoard()` which:
-   - Checks API health (`GET /api/health`)
-   - Sets `connected` flag
-   - Fetches tasks from API or falls back to localStorage
-   - Starts 30-second auto-refresh interval
-
-### Task Lifecycle
-
-```
-Created (backlog) ──drag/move──> In Progress ──drag/move──> Completed
-     │                               │                          │
-     └──────── edit / delete ────────┘──── edit / delete ───────┘
-```
-
-### Optimistic Update Pattern
-
-All mutations follow this pattern in `useBoard.js`:
-1. Generate temporary ID / save previous state
-2. Immediately update local state (optimistic)
-3. Fire API call in background
-4. On success: refresh from server
-5. On failure: rollback to previous state
-
----
-
-## Component Reference
-
-### PinGate
-- **Purpose:** Authentication wall before app loads
-- **PIN:** `53372` (hardcoded)
-- **Session duration:** 24 hours, stored in `localStorage["closedboard_auth"]`
-- **Props:** `children` (renders when authenticated)
-
-### Header
-- **Purpose:** Top navigation bar with search, actions, and sync status
-- **Features:** Sticky positioning, backdrop blur, responsive (mobile search toggle)
-- **Props:** `onNewTask`, `onRefresh`, `connected`, `lastSync`, `searchQuery`, `onSearchChange`, `showArchive`, `onToggleArchive`, `showStats`, `onToggleStats`, `searchInputRef`
-
-### Column
-- **Purpose:** Single Kanban column with drag-and-drop zone
-- **Columns:** Backlog (slate), In Progress (blue), Completed (green)
-- **Drag handling:** HTML5 native `dragover`, `dragleave`, `drop` events
-- **Props:** `columnId`, `tasks`, `onMoveTask`, `onEditTask`, `onDeleteTask`, `onUpdateSubtask`, `onTagFilter`, `activeTagFilter`, `isArchive`
-
-### TaskCard
-- **Purpose:** Individual task display within a column
-- **Features:**
-  - HTML5 drag-and-drop (desktop)
-  - Touch swipe gestures (mobile): swipe right to complete, swipe left to delete
-  - Expandable subtask checklist with progress bar
-  - Clickable tag filters
-  - Priority badge with color coding
-  - AI task indicator (blue left border + robot icon)
-- **Props:** `task`, `onMove`, `onEdit`, `onDelete`, `onUpdateSubtask`, `onTagFilter`, `activeTagFilter`
-
-### TaskModal
-- **Purpose:** Create or edit tasks
-- **Fields:** Title, description, tags (regular + learning), subtasks, resources (learning only), priority, column, AI task toggle
-- **Behavior:** Auto-adds `learning` tag when a learning topic tag is selected
-- **Props:** `isOpen`, `onClose`, `onSave`, `editTask`
-
-### StatsPanel
-- **Purpose:** Dashboard metrics with visual progress
-- **Metrics computed via `useMemo`:**
-  - Streak (consecutive days with completions, up to 365 lookback)
-  - Today's completions
-  - This week's completions
-  - Completion rate (completed / total as percentage)
-  - Segmented progress bar (completed green + in-progress blue)
-- **Props:** `tasks`
-
-### LearningDashboard
-- **Purpose:** Dedicated learning progress tracker per topic
-- **Topics tracked:** React Native, AWS SST, JavaScript (configured in `LEARNING_TOPICS`)
-- **Metrics per topic:** Task completion %, concept completion, resource count
-- **Conditionally rendered:** Only shows when learning-tagged tasks exist
-- **Props:** `tasks`, `onTagFilter`
-
-### CurrentlyWorking
-- **Purpose:** Banner showing AI tasks currently in progress
-- **Filter:** `task.column === 'inProgress' && task.isAITask`
-- **Conditionally rendered:** Hidden when no AI tasks are in progress
-- **Props:** `tasks`
-
-### ActivityFeed
-- **Purpose:** Chronological log of task actions
-- **Display:** Last 15 entries with action-specific icons and color coding
-- **Props:** `history`
-
-### ToastContainer
-- **Purpose:** Floating notification system (bottom-right)
-- **Types:** success (green), error (red), info (blue)
-- **Auto-dismiss:** 3 seconds default
-- **Animation:** Slides in from right
-
----
-
-## State Management
-
-### Core State (`useBoard` hook)
-
-The `useBoard` custom hook is the single source of truth for all task data. It manages:
-
-```
-data: {
-  tasks: {},      // Object<string, Task>  - all tasks keyed by ID
-  history: [],    // HistoryEntry[]        - action log (max 50)
-  meta: {}        // { lastUpdated }       - sync metadata
-}
-loading: boolean  // Initial load state
-connected: boolean // API health status
-lastSync: number  // Timestamp of last successful data fetch
-```
-
-**Exposed interface:**
-- `tasks`, `history`, `loading`, `connected`, `lastSync` -- read-only state
-- `addTask(task)` -- create new task (optimistic)
-- `moveTask(taskId, column)` -- change column (optimistic)
-- `updateTask(taskId, updates)` -- partial update (optimistic)
-- `updateSubtasks(taskId, subtasks)` -- update subtask array
-- `deleteTask(taskId)` -- remove task (optimistic)
-- `getTasksByColumn(columnId, searchQuery)` -- filtered + sorted by priority
-- `getArchivedTasks(searchQuery)` -- completed tasks sorted by completion date
-- `getCurrentlyWorking()` -- AI tasks in progress
-- `refresh()` -- manual re-fetch from API/localStorage
-
-### Context State
-
-| Context | State | Persistence | Used By |
-|---------|-------|-------------|---------|
-| ThemeContext | `isDark: boolean` | `localStorage["closedboard-theme"]` | All components |
-| ToastContext | `toasts: Toast[]` | None (ephemeral) | AppContent, ToastContainer |
-
----
-
-## API Layer & Offline Fallback
-
-### API Configuration (`src/utils/api.js`)
-
-- **Base URL:** `https://legends-athletics-task-disturbed.trycloudflare.com/api`
-  (Cloudflare Tunnel -- likely temporary/development URL)
-
-### Endpoints
+### Public
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/health` | Connection check |
-| GET | `/tasks` | Fetch all board data |
-| POST | `/tasks` | Create new task |
-| PUT | `/tasks/:id` | Update existing task |
-| DELETE | `/tasks/:id` | Delete task |
-| POST | `/tasks/:id/move` | Move task to column |
+| GET | `/api/health` | Health check |
+| POST | `/api/auth` | Validate PIN, returns `{ success }` |
+| GET | `/api/events?token=...` | SSE stream (real-time updates) |
+| POST | `/api/webhooks/github` | GitHub webhook receiver (HMAC verified) |
 
-### Fallback Strategy
+### Protected (requires `Authorization: Bearer <PIN>`)
 
-1. On startup, `checkAPIHealth()` pings `/health`
-2. If API is unreachable, `connected` is set to `false`
-3. `fetchTasks()` catches errors and falls back to `localStorage["closedboard_data"]`
-4. If localStorage is also empty, returns demo data with a single "API Connection Failed" task
-5. Write operations (create/update/delete/move) attempt the API but do NOT fall back to localStorage -- they fail silently with an error return
-6. A "Demo mode - API not connected" banner shows in the UI when `connected` is false
-
-### Auto-Refresh
-
-- Polls `fetchTasks()` every 30 seconds via `setInterval`
-- Updates `lastSync` timestamp on success
-- Header displays relative time since last sync ("Just now", "15s ago", "2m ago")
-
----
-
-## Theming System
-
-### Implementation
-
-- Tailwind's `darkMode: 'class'` strategy
-- `ThemeContext` toggles the `dark` class on `<html>`
-- Default theme: **dark**
-- Persisted to `localStorage["closedboard-theme"]`
-
-### CSS Custom Properties (`index.css`)
-
-Light and dark themes define matching CSS variables:
-- Backgrounds: `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--bg-card`, `--bg-hover`, `--bg-input`
-- Borders: `--border-primary`, `--border-secondary`
-- Text: `--text-primary`, `--text-secondary`, `--text-muted`
-- Accents: `--accent-blue`, `--accent-green`, `--accent-red`, `--accent-yellow`, `--accent-purple`
-
-### Custom Animations
-
-| Name | Effect |
-|------|--------|
-| `slide-in` | Translate Y + scale + fade in |
-| `fade-in` | Opacity 0 to 1 |
-| `pulse-soft` | Gentle opacity pulse |
-| `slide-in-right` | Translate X from right |
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/tasks?boardId=...` | Fetch board data (tasks + history) |
+| POST | `/api/tasks` | Create task |
+| PUT | `/api/tasks/:id` | Update task |
+| DELETE | `/api/tasks/:id` | Delete task |
+| POST | `/api/tasks/:id/move` | Move task to column |
+| POST | `/api/tasks/:id/timer/start` | Start time tracking |
+| POST | `/api/tasks/:id/timer/stop` | Stop time tracking |
+| GET | `/api/boards` | List boards |
+| POST | `/api/boards` | Create board |
+| PUT | `/api/boards/:id` | Update board |
+| DELETE | `/api/boards/:id` | Delete board |
+| GET | `/api/tags` | List custom tags |
+| POST | `/api/tags` | Create tag |
+| PUT | `/api/tags/:id` | Update tag |
+| DELETE | `/api/tags/:id` | Delete tag |
+| GET | `/api/insights?boardId=...` | Pattern analysis insights |
+| GET | `/api/export?boardId=...&format=json\|csv` | Export data |
 
 ---
 
-## Authentication
+## Features
 
-The app uses a simple client-side PIN gate:
+### Core Board
+- **Three-column Kanban:** Backlog, In Progress, Completed
+- **Drag-and-drop** (desktop) and **swipe gestures** (mobile)
+- **Priority levels:** Low, Medium, High, Urgent (color-coded, auto-sorted)
+- **Subtask checklists** with progress bar
+- **Custom tags** with create/edit/delete via TagManager
+- **Multiple boards** with board selector in header
+- **Activity feed** with chronological history
 
-- **PIN:** `53372` (hardcoded in `PinGate.jsx`)
-- **Session:** 24 hours, stored as `{ timestamp }` in `localStorage["closedboard_auth"]`
-- **Input:** Numeric-only, 5 digits, password-masked
-- **Security note:** This is client-side only and provides no real security. The PIN is visible in source code. This is UI-level access control, not authentication.
+### Productivity
+- **Due dates** with amber (approaching) and red (overdue) indicators, auto-sort overdue to top
+- **Time tracking** with start/stop timer on each card, total time in footer
+- **Focus Lock Mode** — Pomodoro timer (25/5/15), distraction-free, auto-logs time entries
+- **Morning Briefing** — before 10 AM, shows yesterday's completions and today's focus order
+- **Quick Capture** — persistent bottom input, type and press Enter to create tasks instantly
+- **Task dependencies** — `blockedBy` field, lock icons, move guards, dependency graph view
+
+### Intelligence
+- **Ghost Tasks (Pattern Detection):**
+  - Stale task detection (7+ days without movement)
+  - Velocity prediction (estimated days to clear backlog)
+  - Day-of-week patterns (your most productive days)
+  - Subtask completion estimates
+  - Completion streaks
+- **Learning Dashboard** — per-topic progress tracking for learning goals
+
+### Infrastructure
+- **Real-time sync** via Server-Sent Events (SSE)
+- **Offline queue** — failed writes are queued in localStorage and replayed on reconnect
+- **Optimistic updates** with rollback on server error
+- **Data export** — JSON and CSV download
+- **Error boundaries** — component-level error isolation
 
 ---
 
 ## Keyboard Shortcuts
 
-| Key | Action | Condition |
-|-----|--------|-----------|
-| `N` | Open new task modal | Not typing in input/textarea |
-| `R` | Refresh board data | Not typing in input/textarea |
-| `/` | Focus search input | Not typing in input/textarea |
-| `Esc` | Close modal | Always active |
+| Key | Action |
+|-----|--------|
+| `N` | New task |
+| `j` / `k` | Navigate between tasks |
+| `Enter` | Edit focused task |
+| `D` | Delete focused task |
+| `/` | Focus search |
+| `R` | Refresh board |
+| `Esc` | Close modal / clear focus |
 
-Implemented in `useKeyboardShortcuts.js` via `document.addEventListener('keydown', ...)`.
+Shortcuts are disabled when typing in inputs or during Focus Mode / Morning Briefing.
+
+---
+
+## Integrations
+
+### Telegram Bot
+
+Manage tasks from your phone without opening a browser.
+
+| Command | Action |
+|---------|--------|
+| `/start` | Welcome + command list |
+| `/add <title>` | Create task in Backlog |
+| `/list` | Show in-progress tasks |
+| `/backlog` | Show backlog tasks |
+| `/done <#>` | Complete task by number or title |
+| `/status` | Board overview with counts and streak |
+
+**Setup:** Set `TELEGRAM_BOT_TOKEN` and optionally `TELEGRAM_CHAT_IDS` on your backend host.
+
+### GitHub Issues Sync
+
+Two-way sync between GitHub Issues and ClosedBoard.
+
+- **Issue opened** on GitHub → task created in Backlog (labels mapped to tags)
+- **Issue closed** on GitHub → task auto-completed
+- **Task completed** on board → GitHub issue auto-closed
+- **Issue reopened** on GitHub → task moved back to Backlog
+
+**Setup:**
+1. Set `GITHUB_TOKEN` and `GITHUB_WEBHOOK_SECRET` env vars on your backend host
+2. In your GitHub repo: Settings → Webhooks → Add webhook
+   - Payload URL: `https://<your-backend>/api/webhooks/github`
+   - Content type: `application/json`
+   - Secret: same as `GITHUB_WEBHOOK_SECRET`
+   - Events: select "Issues"
 
 ---
 
 ## Deployment
 
-### GitHub Actions (`deploy.yml`)
+### Frontend (GitHub Pages)
 
-Triggers on push to `main`. Steps:
-1. Checkout code
-2. Setup Node 20 with npm cache
-3. `npm ci` (clean install)
-4. `npm run build` (Vite production build)
-5. Upload `./dist` as GitHub Pages artifact
-6. Deploy to GitHub Pages
+Automated via `.github/workflows/deploy.yml` on push to `main`:
+1. Checkout → Node 20 → `npm ci` → `npm run build`
+2. Upload `dist/` → Deploy to GitHub Pages
 
-### Vite Config
+### Backend (Render)
 
-- `base: '/closedboard/'` -- required for GitHub Pages subdirectory hosting
-- `outDir: 'dist'`
+Deployed via `render.yaml` blueprint:
+- **Runtime:** Node.js (free tier)
+- **Build:** `npm install`
+- **Start:** `node index.js`
+- **Database:** SQLite file (persists across restarts, resets on full redeploy)
 
-### PWA Support
+### Environment Variables (Backend)
 
-Partial PWA setup via `manifest.json`:
-- `display: "standalone"` for app-like experience
-- Categories: productivity, utilities
-- Emoji-based SVG icon (no actual icon files)
-- **Missing:** Service worker, offline caching, install prompt
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `API_SECRET` | Yes | PIN used for authentication |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins |
+| `DB_PATH` | No | SQLite file path (default: `./closedboard.db`) |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token from @BotFather |
+| `TELEGRAM_CHAT_IDS` | No | Comma-separated authorized Telegram chat IDs |
+| `GITHUB_TOKEN` | No | GitHub PAT with `repo` scope (for auto-closing issues) |
+| `GITHUB_WEBHOOK_SECRET` | No | Secret for webhook HMAC verification |
+
+### Environment Variables (Frontend)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_API_URL` | No | Backend API base URL (defaults to Render deployment) |
 
 ---
 
-## Configuration Constants
+## Configuration
 
-### Columns (`COLUMNS`)
+### Columns
 
-```
-backlog     -> "Backlog"      (slate)
-inProgress  -> "In Progress"  (blue)
-completed   -> "Completed"    (green)
-```
+| ID | Label | Color |
+|----|-------|-------|
+| `backlog` | Backlog | Slate |
+| `inProgress` | In Progress | Blue |
+| `completed` | Completed | Green |
 
-### Priorities (`PRIORITIES`)
+### Priorities
 
-```
-low    -> "Low"    (slate,  Circle icon)
-medium -> "Medium" (yellow, CircleDot icon)
-high   -> "High"   (orange, AlertCircle icon)
-urgent -> "Urgent" (red,    Flame icon)
-```
-
-### Tags (`TAGS`)
-
-Regular tags: `feature`, `bug`, `improvement`, `research`, `personal`, `work`, `ai`
-
-Learning tags (special behavior):
-- `learning` -- parent tag, auto-added when topic selected
-- `react-native` -- learning topic
-- `aws-sst` -- learning topic
-- `javascript` -- learning topic
+| ID | Label | Icon |
+|----|-------|------|
+| `low` | Low | Circle |
+| `medium` | Medium | CircleDot |
+| `high` | High | AlertCircle |
+| `urgent` | Urgent | Flame |
 
 ### localStorage Keys
 
-| Key | Purpose | Format |
-|-----|---------|--------|
-| `closedboard_auth` | PIN session | `{ timestamp: number }` |
-| `closedboard-theme` | Theme preference | `"dark"` or `"light"` |
-| `closedboard_data` | Offline task data | Full board state object |
-
----
-
-## Known Limitations
-
-1. **No real authentication** -- PIN is hardcoded in client-side JavaScript
-2. **API URL is a Cloudflare Tunnel** -- temporary, will change on server restart
-3. **No offline write support** -- create/update/delete fail silently when API is down (only read falls back to localStorage)
-4. **No routing** -- single-page with no URL-based navigation
-5. **No service worker** -- PWA manifest exists but no offline caching
-6. **node_modules committed** -- entire dependency tree is checked into git
-7. **dist committed** -- build output is in the repo (normally handled by CI)
-8. **No testing** -- no unit, integration, or e2e tests
-9. **No TypeScript** -- all JavaScript with no type safety
-10. **Subtask reordering** -- subtasks can't be reordered, only added/removed/toggled
-11. **No due dates** -- tasks have no deadline or scheduling
-12. **History cap** -- only 50 most recent history entries are retained
-13. **Tag system is static** -- tags are hardcoded in constants, users can't create custom tags
-
----
-
-## Future Development Roadmap
-
-### Phase 1: Foundation Hardening
-
-- [ ] Remove `node_modules/` and `dist/` from git (add to `.gitignore`)
-- [ ] Move PIN and API URL to environment variables (`.env`)
-- [ ] Add TypeScript for type safety across the codebase
-- [ ] Add ESLint + Prettier for consistent code formatting
-- [ ] Write unit tests for `useBoard`, `constants`, and `api` utilities
-- [ ] Add proper error boundaries for component-level error handling
-
-### Phase 2: Data & Backend
-
-- [ ] Build a proper backend (Node.js/Express or serverless) with database (PostgreSQL/Supabase)
-- [ ] Implement real authentication (OAuth, magic link, or JWT-based)
-- [ ] Add full offline support with localStorage writes + sync queue
-- [ ] Implement conflict resolution for concurrent edits
-- [ ] Add data export/import (JSON, CSV)
-- [ ] Replace Cloudflare Tunnel with stable hosting
-
-### Phase 3: Feature Expansion
-
-- [ ] Due dates and deadline reminders
-- [ ] Task ordering within columns (manual sort / drag reorder)
-- [ ] Custom tags (user-defined colors and labels)
-- [ ] File attachments on tasks
-- [ ] Markdown support in task descriptions
-- [ ] Subtask reordering via drag
-- [ ] Task comments / notes thread
-- [ ] Recurring tasks
-- [ ] Multiple boards / workspaces
-- [ ] Calendar view alongside Kanban
-
-### Phase 4: Advanced Features
-
-- [ ] Real-time collaboration (WebSockets)
-- [ ] AI integration for task suggestions, auto-categorization, summaries
-- [ ] Notification system (browser notifications, email digests)
-- [ ] Analytics dashboard with charts (completion trends, time tracking)
-- [ ] Mobile app (React Native, sharing code with web via shared hooks/utils)
-- [ ] Plugin / extension system
-- [ ] API keys for third-party integrations (Slack, Discord, GitHub Issues)
-- [ ] Time tracking per task with start/stop timer
+| Key | Purpose |
+|-----|---------|
+| `closedboard_auth` | Auth session (token + timestamp) |
+| `closedboard-theme` | Theme preference (`dark` / `light`) |
+| `closedboard_data` | Offline task data fallback |
+| `closedboard_current_board` | Active board ID |
+| `closedboard_sync_queue` | Pending offline operations |
+| `closedboard_briefing_dismissed` | Morning briefing daily dismissal |
+| `closedboard_dismissed_insights` | Dismissed Ghost Tasks insights |
 
 ---
 
 ## Getting Started
 
+### Frontend
+
 ```bash
-# Clone
 git clone https://github.com/MHarisU/closedboard.git
 cd closedboard
 
-# Install dependencies
 npm install
-
-# Start dev server (http://localhost:5173)
-npm run dev
-
-# Production build
-npm run build
-
-# Preview production build
-npm run preview
+npm run dev       # Dev server at http://localhost:5173
+npm run build     # Production build
+npm run preview   # Preview production build
 ```
 
-**Default PIN:** `53372`
+### Backend
 
-**Note:** The app will show "Demo mode" if the backend API is unreachable. All features still work with localStorage as the data store.
+```bash
+cd backend
+
+# Create .env from template
+cp .env.example .env
+# Edit .env and set API_SECRET to your chosen PIN
+
+npm install
+npm run dev       # Dev server at http://localhost:3001
+```
+
+The app will show "Demo mode" if the backend is unreachable. All features work with localStorage as the data store, but sync and integrations require the backend.
+
+---
+
+## Known Limitations
+
+1. **Free tier cold starts** — Render spins down after 15 min of inactivity; first request takes ~50s
+2. **Ephemeral storage** — SQLite data resets on full Render redeploy (persists across restarts)
+3. **No real multi-user auth** — PIN-based access, single user per deployment
+4. **No service worker** — PWA manifest exists but no offline caching
+5. **No TypeScript** — all JavaScript
+6. **No automated tests** — no unit, integration, or e2e tests
+7. **Subtask reordering** — subtasks can only be added/removed/toggled, not reordered
+8. **dist committed** — build output is in the repo for GitHub Pages (normally handled by CI)
 
 ---
 
